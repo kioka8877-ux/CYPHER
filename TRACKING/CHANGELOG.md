@@ -9,3 +9,6 @@
 - Stubs : cyp_*.py, CYPHER_STYLE.py, cypher_ledger.json, CYPHER_EXECUTEUR.py
 - Stubs workflows GH Actions : deathwing_render.yml, ravenwing_assemble.yml, luther_purge.yml
 - Docs de suivi : CYPHER_STATE.md, CHANGELOG.md, ARCHITECTURE.md
+
+## Prochaine étape
+- CYPHER_STYLE.py + cypher_ledger.json schema + CYPHER_EXECUTEUR.py stubs fonctionnels
