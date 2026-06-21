@@ -13,7 +13,7 @@
 | F02_CALIBAN | Traducteur dict→acier ManimCE + preview HTML | Sandbox | ✅ |
 | F03_DEATHWING | Cristallisation headless (render lourd) | GH Actions | ✅ |
 | F04_RAVENWING | Assembleur FFmpeg + interpolation géo-caméra | GH Actions | ✅ |
-| F05_LUTHER | Effacement métadata, empreinte zéro | GH Actions | STUB |
+| F05_LUTHER | Effacement métadata, empreinte zéro | GH Actions | ✅ |
 
 ## Progression globale
 - [x] Structure repo créée (3a91780)
@@ -25,7 +25,7 @@
 - [x] F02_CALIBAN code (cyp_caliban.py — acier.py generator + preview HTML dark-theme)
 - [x] F03_DEATHWING workflow + code (cyp_deathwing.py + deathwing_render.yml)
 - [x] F04_RAVENWING workflow + code (cyp_ravenwing.py + ravenwing_assemble.yml)
-- [ ] F05_LUTHER workflow + code
+- [x] F05_LUTHER workflow + code (cyp_luther.py + luther_purge.yml — port depuis CRUSADER)
 - [ ] Test production bout-en-bout
 
 ## Contraintes physiques

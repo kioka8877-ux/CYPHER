@@ -16,5 +16,12 @@
 - deathwing_render.yml : apt-get cairo/pango/ffmpeg + pip manim==0.20.1 + ATLAS from GitHub + render headless + upload artifact + upload release
 - CYPHER_EXECUTEUR.py : cmd_gate3 fonctionnel (appelle cyp_deathwing.py)
 
+## [0.5.0] — 2026-06-21
+### Added
+- F05_LUTHER : cyp_luther.py (vérifie release → trigger luther_purge.yml → print URL + cmd download)
+- luther_purge.yml : FFmpeg stream copy + -map_metadata -1 + audit post-strip + normalisation timestamp + upload clean_final.mp4 sur release + artifact backup
+- CYPHER_EXECUTEUR.py : cmd_close — appelle LUTHER + print commande download post-run
+- Port direct depuis CRUSADER alpha/F05_LUTHER (strip éprouvé en production)
+
 ## Prochaine étape
-- F04_RAVENWING : workflow + cyp_ravenwing.py (assemblage FFmpeg final)
+- Test production bout-en-bout (start → gate2 → gate3 → gate4 → close)

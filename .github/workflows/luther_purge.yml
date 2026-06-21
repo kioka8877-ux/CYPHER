@@ -1,0 +1,100 @@
+name: F05 LUTHER — Purge métadonnées
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "ID de production (ex: cyp_20260621_1200)"
+        required: true
+      production_date:
+        description: "Date production YYYY-MM-DD (pour normalisation timestamp)"
+        required: true
+
+jobs:
+  luther:
+    name: Strip empreinte zéro
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+
+      - name: Télécharger youtube_final.mp4 depuis release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          TAG="cyp-${{ github.event.inputs.run_id }}"
+          mkdir -p /tmp/luther_in /tmp/luther_out
+          gh release download "$TAG" \
+            --repo ${{ github.repository }} \
+            --pattern "youtube_final.mp4" \
+            --dir /tmp/luther_in
+          echo "[LUTHER] $(du -h /tmp/luther_in/youtube_final.mp4 | cut -f1)"
+
+      - name: Strip métadonnées — empreinte zéro
+        run: |
+          ffmpeg -y \
+            -i /tmp/luther_in/youtube_final.mp4 \
+            -c copy \
+            -map_metadata -1 \
+            -fflags +bitexact \
+            -flags:v +bitexact \
+            -flags:a +bitexact \
+            /tmp/luther_out/clean_final.mp4
+
+      - name: Normaliser timestamp fichier
+        run: |
+          touch -d "${{ github.event.inputs.production_date }} 12:00:00" /tmp/luther_out/clean_final.mp4
+          echo "[LUTHER] Timestamp → ${{ github.event.inputs.production_date }}"
+
+      - name: Audit post-strip
+        run: |
+          TAGS=$(ffprobe -v quiet -print_format json -show_format /tmp/luther_out/clean_final.mp4 \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps(d.get('format',{}).get('tags',{})))")
+          echo "Tags résiduels : $TAGS"
+          SUSPICIOUS=$(echo "$TAGS" | python3 -c "
+          import json,sys
+          tags=json.load(sys.stdin)
+          suspects=['remotion','manim','ffmpeg','lavf','lavc','libav','python','claude']
+          found=[k for k,v in tags.items() if any(s in (k+' '+str(v)).lower() for s in suspects)]
+          print(','.join(found))
+          ")
+          if [ -n "$SUSPICIOUS" ]; then
+            echo "[LUTHER] ECHEC tags suspects : $SUSPICIOUS"; exit 1
+          fi
+          echo "[LUTHER] Empreinte zéro confirmée"
+
+      - name: Vérifier intégrité
+        run: |
+          SIZE=$(du -h /tmp/luther_out/clean_final.mp4 | cut -f1)
+          echo "[LUTHER] clean_final.mp4 — $SIZE"
+          ffprobe -v quiet -show_streams /tmp/luther_out/clean_final.mp4 | grep codec_name
+
+      - name: Upload clean_final.mp4 sur release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          TAG="cyp-${{ github.event.inputs.run_id }}"
+          gh release upload "$TAG" \
+            --repo ${{ github.repository }} \
+            /tmp/luther_out/clean_final.mp4 \
+            --clobber
+          echo "[LUTHER] clean_final.mp4 → release $TAG"
+
+      - name: Upload artifact backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: clean-final-${{ github.event.inputs.run_id }}
+          path: /tmp/luther_out/clean_final.mp4
+          retention-days: 30
+
+      - name: Victoria Aeterna
+        run: |
+          echo "══════════════════════════════════════"
+          echo "  LUTHER — EMPREINTE EFFACÉE"
+          echo "  VICTORIA AETERNA"
+          echo "══════════════════════════════════════"

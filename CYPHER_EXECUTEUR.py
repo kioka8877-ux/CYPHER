@@ -70,19 +70,20 @@ def cmd_gate4(args):
 
 
 def cmd_close(args):
-    """CLOSE — télécharger youtube_final + passer à LUTHER."""
+    """CLOSE — déclencher LUTHER (purge metadata) → print URL → instructions download."""
     luther = Path(__file__).parent / "F05_LUTHER" / "CODEBASE" / "cyp_luther.py"
     print("[CYPHER] CLOSE — LUTHER purge finale...")
     result = subprocess.run([sys.executable, str(luther)], env={**os.environ})
     if result.returncode != 0:
         sys.exit("[CYPHER] LUTHER a échoué — vérifier les logs")
     ledger = load_ledger()
+    run_id = ledger.get("current_run_id", "")
     ledger["status"] = "victoria_aeterna"
     save_ledger(ledger)
-    clean = ledger.get("output", {}).get("clean_video")
+    tag = f"cyp-{run_id}" if run_id else "cyp-???"
+    print(f"\n[CYPHER] Quand LUTHER est vert, télécharge l'artefact final :")
+    print(f"  gh release download {tag} --repo {REPO} --pattern clean_final.mp4 --dir .")
     print(f"\n[CYPHER] VICTORIA AETERNA")
-    if clean:
-        print(f"[CYPHER] Artefact final : {clean}")
 
 
 def main():
