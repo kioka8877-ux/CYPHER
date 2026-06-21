@@ -18,9 +18,9 @@
 ## Progression globale
 - [x] Structure repo créée (3a91780)
 - [x] Docs de suivi (58a5446)
-- [ ] CYPHER_STYLE.py (palette Dark Angels)
-- [ ] cypher_ledger.json schema
-- [ ] CYPHER_EXECUTEUR.py (orchestrateur gates)
+- [x] CYPHER_STYLE.py (palette Dark Angels)
+- [x] cypher_ledger.json schema
+- [x] CYPHER_EXECUTEUR.py (orchestrateur gates, stubs)
 - [ ] F01_LION code
 - [ ] F02_CALIBAN code + preview HTML
 - [ ] F03_DEATHWING workflow + code

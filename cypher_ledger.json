@@ -1,0 +1,33 @@
+{
+  "run_id": null,
+  "created_at": null,
+  "status": "idle",
+  "narrative": {
+    "subject": null,
+    "duration_seconds": null,
+    "language": "fr",
+    "tone": "dramatique",
+    "script": null
+  },
+  "timeline_clock": null,
+  "spatial_events": {
+    "geo_focus": [],
+    "highlights": [],
+    "overlays": []
+  },
+  "assets": {
+    "audio_raw": null,
+    "audio_clean": null,
+    "acier_path": null,
+    "preview_html": null
+  },
+  "gh_runs": {
+    "deathwing": null,
+    "ravenwing": null,
+    "luther": null
+  },
+  "output": {
+    "final_video": null,
+    "clean_video": null
+  }
+}
