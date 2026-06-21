@@ -1,0 +1,106 @@
+name: F04 RAVENWING — Assemblage final
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "CYPHER run ID (ex: CYP_20260621_1430)"
+        required: true
+      has_audio:
+        description: "Audio disponible (true/false)"
+        required: false
+        default: "true"
+
+jobs:
+  ravenwing:
+    name: Assemblage FFmpeg
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      RUN_ID: ${{ inputs.run_id }}
+      HAS_AUDIO: ${{ inputs.has_audio }}
+      TAG: cyp-${{ inputs.run_id }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Installer FFmpeg
+        uses: FedericoCarboni/setup-ffmpeg@v3
+
+      - name: Télécharger assets depuis release
+        run: |
+          mkdir -p /tmp/ravenwing
+          gh release download "$TAG" \
+            --repo ${{ github.repository }} \
+            --dir /tmp/ravenwing \
+            --clobber
+          echo "=== Assets téléchargés ==="
+          ls -lh /tmp/ravenwing/
+
+      - name: Identifier la vidéo rendue
+        run: |
+          VIDEO=$(find /tmp/ravenwing -name "*.mp4" | head -1)
+          if [ -z "$VIDEO" ]; then
+            echo "Erreur : aucune vidéo MP4 trouvée dans la release"
+            exit 1
+          fi
+          echo "VIDEO=$VIDEO" >> $GITHUB_ENV
+          echo "[RAVENWING] Vidéo : $VIDEO"
+          ffprobe -v quiet -print_format json -show_streams "$VIDEO" | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)
+          for s in d['streams']:
+              print(f\"  {s['codec_type']}: {s.get('codec_name','?')} — {s.get('width','?')}x{s.get('height','?')} @ {s.get('r_frame_rate','?')} fps\")
+          "
+
+      - name: Assembler vidéo + audio (avec audio)
+        if: env.HAS_AUDIO == 'true'
+        run: |
+          AUDIO=$(find /tmp/ravenwing -name "audio_raw.mp3" | head -1)
+          if [ -z "$AUDIO" ]; then
+            echo "Avertissement : audio_raw.mp3 absent malgré has_audio=true — fallback muet"
+            ffmpeg -i "$VIDEO" \
+              -c:v copy \
+              -an \
+              -movflags +faststart \
+              /tmp/ravenwing/youtube_final.mp4
+          else
+            echo "[RAVENWING] Merge vidéo + audio avec loudnorm"
+            ffmpeg -i "$VIDEO" -i "$AUDIO" \
+              -filter_complex "[1:a]loudnorm=I=-16:TP=-1.5:LRA=11[a_norm]" \
+              -map 0:v:0 -map "[a_norm]" \
+              -c:v copy \
+              -c:a aac -b:a 192k \
+              -shortest \
+              -movflags +faststart \
+              /tmp/ravenwing/youtube_final.mp4
+          fi
+          echo "[RAVENWING] youtube_final.mp4 généré"
+          ls -lh /tmp/ravenwing/youtube_final.mp4
+
+      - name: Assembler vidéo muette (sans audio)
+        if: env.HAS_AUDIO != 'true'
+        run: |
+          ffmpeg -i "$VIDEO" \
+            -c:v copy \
+            -an \
+            -movflags +faststart \
+            /tmp/ravenwing/youtube_final.mp4
+          echo "[RAVENWING] youtube_final.mp4 (muet) généré"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-final-${{ inputs.run_id }}
+          path: /tmp/ravenwing/youtube_final.mp4
+          retention-days: 30
+
+      - name: Upload vers release
+        run: |
+          gh release upload "$TAG" \
+            /tmp/ravenwing/youtube_final.mp4 \
+            --repo ${{ github.repository }} \
+            --clobber
+          echo "[RAVENWING] youtube_final.mp4 → release $TAG"

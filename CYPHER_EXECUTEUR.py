@@ -61,17 +61,28 @@ def cmd_gate3(args):
 
 
 def cmd_gate4(args):
-    """GATE 4 — déclencher RAVENWING + LUTHER sur GH Actions."""
-    print("[CYPHER] GATE 4 — trigger RAVENWING → LUTHER...")
-    # TODO: workflow_dispatch ravenwing_assemble.yml
-    print("[CYPHER] Implémenter trigger RAVENWING")
+    """GATE 4 — déclencher RAVENWING (assemblage final)."""
+    ravenwing = Path(__file__).parent / "F04_RAVENWING" / "CODEBASE" / "cyp_ravenwing.py"
+    print("[CYPHER] GATE 4 — RAVENWING assemblage en cours...")
+    result = subprocess.run([sys.executable, str(ravenwing)], env={**os.environ})
+    if result.returncode != 0:
+        sys.exit("[CYPHER] RAVENWING a échoué — vérifier les logs")
 
 
 def cmd_close(args):
-    """CLOSE — télécharger artefact final + archiver ledger."""
-    print("[CYPHER] CLOSE — téléchargement artefact final...")
-    # TODO: gh run download + archiver ledger
-    print("[CYPHER] Implémenter CLOSE")
+    """CLOSE — télécharger youtube_final + passer à LUTHER."""
+    luther = Path(__file__).parent / "F05_LUTHER" / "CODEBASE" / "cyp_luther.py"
+    print("[CYPHER] CLOSE — LUTHER purge finale...")
+    result = subprocess.run([sys.executable, str(luther)], env={**os.environ})
+    if result.returncode != 0:
+        sys.exit("[CYPHER] LUTHER a échoué — vérifier les logs")
+    ledger = load_ledger()
+    ledger["status"] = "victoria_aeterna"
+    save_ledger(ledger)
+    clean = ledger.get("output", {}).get("clean_video")
+    print(f"\n[CYPHER] VICTORIA AETERNA")
+    if clean:
+        print(f"[CYPHER] Artefact final : {clean}")
 
 
 def main():
