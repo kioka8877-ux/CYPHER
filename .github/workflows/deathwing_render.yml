@@ -1,0 +1,77 @@
+name: DEATHWING — Manim Render
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "CYPHER run_id (ex: CYP_20260621_1200)"
+        required: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps (cairo + pango + ffmpeg)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev libpango1.0-dev libpangocairo-1.0-0 \
+            libglib2.0-dev pkg-config build-essential \
+            ffmpeg texlive-latex-base texlive-fonts-recommended \
+            fonts-dejavu-core
+          pip install --upgrade pip wheel
+
+      - name: Install Manim + ATLAS
+        run: |
+          pip install manim==0.20.1
+          pip install git+https://github.com/kioka8877-ux/ATLAS.git
+
+      - name: Download acier.py from release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          mkdir -p render_workspace
+          gh release download "cyp-${{ inputs.run_id }}" \
+            --repo ${{ github.repository }} \
+            --pattern "acier.py" \
+            --dir render_workspace
+
+      - name: Render CypherScene
+        run: |
+          cd render_workspace
+          python -m manim acier.py CypherScene \
+            --format mp4 \
+            --fps 30 \
+            --media_dir ./media \
+            --disable_caching \
+            -q h
+          RENDERED=$(find ./media -name "*.mp4" | head -1)
+          echo "RENDERED=$RENDERED" >> $GITHUB_ENV
+          echo "[DEATHWING] Rendu : $RENDERED"
+
+      - name: Upload video artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypher-render-${{ inputs.run_id }}
+          path: ${{ env.RENDERED }}
+          retention-days: 7
+
+      - name: Upload video to release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          gh release upload "cyp-${{ inputs.run_id }}" \
+            "${{ env.RENDERED }}" \
+            --repo ${{ github.repository }} \
+            --clobber
+          echo "[DEATHWING] Video → release cyp-${{ inputs.run_id }}"

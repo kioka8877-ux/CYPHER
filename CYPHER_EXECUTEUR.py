@@ -53,9 +53,11 @@ def cmd_gate2(args):
 
 def cmd_gate3(args):
     """GATE 3 — déclencher DEATHWING sur GH Actions."""
-    print("[CYPHER] GATE 3 — trigger DEATHWING...")
-    # TODO: workflow_dispatch deathwing_render.yml
-    print("[CYPHER] Implémenter trigger DEATHWING")
+    deathwing = Path(__file__).parent / "F03_DEATHWING" / "CODEBASE" / "cyp_deathwing.py"
+    print("[CYPHER] GATE 3 — DEATHWING render en cours...")
+    result = subprocess.run([sys.executable, str(deathwing)], env={**os.environ})
+    if result.returncode != 0:
+        sys.exit("[CYPHER] DEATHWING a échoué — vérifier les logs")
 
 
 def cmd_gate4(args):

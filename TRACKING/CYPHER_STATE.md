@@ -11,7 +11,7 @@
 |---|---|---|---|
 | F01_LION | Orchestrateur / narrateur | Sandbox | STUB |
 | F02_CALIBAN | Traducteur dict→acier ManimCE + preview HTML | Sandbox | STUB |
-| F03_DEATHWING | Cristallisation headless (render lourd) | GH Actions | STUB |
+| F03_DEATHWING | Cristallisation headless (render lourd) | GH Actions | ✅ |
 | F04_RAVENWING | Assembleur FFmpeg + interpolation géo-caméra | GH Actions | STUB |
 | F05_LUTHER | Effacement métadata, empreinte zéro | GH Actions | STUB |
 
@@ -23,7 +23,7 @@
 - [x] CYPHER_EXECUTEUR.py (orchestrateur gates, stubs)
 - [x] F01_LION code (cyp_lion.py — oracle AI Gateway + ledger)
 - [x] F02_CALIBAN code (cyp_caliban.py — acier.py generator + preview HTML dark-theme)
-- [ ] F03_DEATHWING workflow + code
+- [x] F03_DEATHWING workflow + code (cyp_deathwing.py + deathwing_render.yml)
 - [ ] F04_RAVENWING workflow + code
 - [ ] F05_LUTHER workflow + code
 - [ ] Test production bout-en-bout
@@ -37,7 +37,7 @@
 ## Palette Dark Angels
 - Fond : #050B08
 - Alerte : #B30006
-- Territoire neutre : à définir
+- Territoire neutre : #1A2E25
 
 ## Réinstallation sandbox (Manim / ATLAS)
 Voir kioka8877-ux/ATLAS — TRACKING/ATLAS_STATE.md pour la procédure complète Chemin B (extraction .deb manuelle).
