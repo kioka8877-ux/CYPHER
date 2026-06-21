@@ -22,7 +22,7 @@
 - [x] cypher_ledger.json schema
 - [x] CYPHER_EXECUTEUR.py (orchestrateur gates, stubs)
 - [x] F01_LION code (cyp_lion.py — oracle AI Gateway + ledger)
-- [ ] F02_CALIBAN code + preview HTML
+- [x] F02_CALIBAN code (cyp_caliban.py — acier.py generator + preview HTML dark-theme)
 - [ ] F03_DEATHWING workflow + code
 - [ ] F04_RAVENWING workflow + code
 - [ ] F05_LUTHER workflow + code

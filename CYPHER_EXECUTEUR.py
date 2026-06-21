@@ -42,10 +42,13 @@ def cmd_start(args):
 
 
 def cmd_gate2(args):
-    """GATE 2 — valider le preview CALIBAN avant DEATHWING."""
-    print("[CYPHER] GATE 2 — preview CALIBAN...")
-    # TODO: appeler cyp_caliban.py + ouvrir preview HTML
-    print("[CYPHER] Implémenter F02_CALIBAN")
+    """GATE 2 — CALIBAN génère acier.py + preview HTML opérateur."""
+    caliban = Path(__file__).parent / "F02_CALIBAN" / "CODEBASE" / "cyp_caliban.py"
+    cmd = [sys.executable, str(caliban), "--serve", "--port", str(args.port)]
+    print("[CYPHER] GATE 2 — CALIBAN en cours (acier + preview)...")
+    result = subprocess.run(cmd, env={**os.environ})
+    if result.returncode != 0:
+        sys.exit("[CYPHER] CALIBAN a échoué — vérifier les logs")
 
 
 def cmd_gate3(args):
@@ -79,7 +82,8 @@ def main():
     p_start.add_argument("--language", default="fr")
     p_start.add_argument("--tone", default="dramatique")
 
-    sub.add_parser("gate2")
+    p_gate2 = sub.add_parser("gate2")
+    p_gate2.add_argument("--port", type=int, default=8090)
     sub.add_parser("gate3")
     sub.add_parser("gate4")
     sub.add_parser("close")
