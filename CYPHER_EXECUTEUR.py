@@ -5,6 +5,7 @@ Opérateur intervient uniquement aux gates. Claude opère tout le reste.
 import argparse
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -25,9 +26,19 @@ def save_ledger(data):
 
 def cmd_start(args):
     """GATE 1 — brief opérateur → LION génère le script + spatial_events."""
-    print("[CYPHER] GATE 1 — LION en cours...")
-    # TODO: appeler cyp_lion.py
-    print("[CYPHER] Implémenter F01_LION")
+    lion = Path(__file__).parent / "F01_LION" / "CODEBASE" / "cyp_lion.py"
+    cmd = [
+        sys.executable, str(lion),
+        "--subject", args.subject,
+        "--duration", str(args.duration),
+        "--language", args.language,
+        "--tone", args.tone,
+    ]
+    print(f"[CYPHER] GATE 1 — LION oracle en cours...")
+    result = subprocess.run(cmd, env={**os.environ})
+    if result.returncode != 0:
+        sys.exit("[CYPHER] LION a échoué — vérifier les logs")
+    print("\n[CYPHER] GATE 1 terminé. Valide le script dans le ledger puis lance: gate2")
 
 
 def cmd_gate2(args):

@@ -21,7 +21,7 @@
 - [x] CYPHER_STYLE.py (palette Dark Angels)
 - [x] cypher_ledger.json schema
 - [x] CYPHER_EXECUTEUR.py (orchestrateur gates, stubs)
-- [ ] F01_LION code
+- [x] F01_LION code (cyp_lion.py — oracle AI Gateway + ledger)
 - [ ] F02_CALIBAN code + preview HTML
 - [ ] F03_DEATHWING workflow + code
 - [ ] F04_RAVENWING workflow + code
