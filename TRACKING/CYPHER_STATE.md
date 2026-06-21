@@ -26,7 +26,8 @@
 - [x] F03_DEATHWING workflow + code (cyp_deathwing.py + deathwing_render.yml)
 - [x] F04_RAVENWING workflow + code (cyp_ravenwing.py + ravenwing_assemble.yml)
 - [x] F05_LUTHER workflow + code (cyp_luther.py + luther_purge.yml — port depuis CRUSADER)
-- [ ] Test production bout-en-bout
+- [x] Fix LION — requests + system-in-messages + haiku-4.5 (test Gate 1 OK : Constantinople 8 events)
+- [ ] Test Gate 2 (CALIBAN) bout-en-bout
 
 ## Contraintes physiques
 - Isolation subprocess stricte : ManimCE et manimgl ne cohabitent jamais dans le même processus

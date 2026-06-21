@@ -10,12 +10,14 @@ import sys
 import datetime
 from pathlib import Path
 
+import requests
+
 BASE = Path(__file__).parent.parent.parent
 LEDGER_PATH = BASE / "cypher_ledger.json"
 
 AI_BASE = os.environ.get("AI_GATEWAY_BASE_URL", "")
-AI_KEY = os.environ.get("AI_GATEWAY_API_KEY", "")
-MODEL = "anthropic/claude-sonnet-4.6"
+AI_KEY  = os.environ.get("AI_GATEWAY_API_KEY", "")
+MODEL   = "anthropic/claude-haiku-4.5"
 
 
 def load_ledger():
@@ -29,9 +31,6 @@ def save_ledger(data):
 
 
 def call_oracle(subject: str, duration: int, language: str, tone: str) -> dict:
-    import urllib.request
-    import urllib.error
-
     system_prompt = (
         "Tu es LION, oracle géopolitique. Tu génères des scripts de narration "
         "et des séquences spatiales précises pour des vidéos cartographiques. "
@@ -63,26 +62,32 @@ FORMAT JSON STRICT :
 Produis 5 à 12 événements spatiaux couvrant toute la durée.
 Codes ISO 3166-1 alpha-2 pour les pays."""
 
-    payload = json.dumps({
+    payload = {
         "model": MODEL,
-        "messages": [{"role": "user", "content": user_prompt}],
-        "system": system_prompt,
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": user_prompt}
+        ],
         "max_tokens": 4096,
         "temperature": 0.7
-    }).encode()
+    }
 
     url = f"{AI_BASE}/api/v1/chat/completions"
-    req = urllib.request.Request(
-        url, data=payload,
-        headers={"Authorization": f"Bearer {AI_KEY}", "Content-Type": "application/json"},
-        method="POST"
-    )
-
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            body = json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        sys.exit(f"[LION] Erreur API {e.code}: {e.read().decode()[:300]}")
+        resp = requests.post(
+            url,
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {AI_KEY}",
+                "Content-Type": "application/json",
+                "Accept-Encoding": "identity"
+            },
+            timeout=90
+        )
+        resp.raise_for_status()
+        body = resp.json()
+    except requests.HTTPError as e:
+        sys.exit(f"[LION] Erreur API {e.response.status_code}: {e.response.text[:300]}")
     except Exception as e:
         sys.exit(f"[LION] Erreur réseau: {e}")
 
@@ -135,7 +140,7 @@ def print_summary(data: dict, subject: str, duration: int):
 
 def main():
     parser = argparse.ArgumentParser(description="CYPHER F01 LION")
-    parser.add_argument("--subject", required=True)
+    parser.add_argument("--subject",  required=True)
     parser.add_argument("--duration", type=int, default=90)
     parser.add_argument("--language", default="fr")
     parser.add_argument("--tone", default="dramatique",
@@ -171,9 +176,9 @@ def main():
 
     ledger["narrative"]["script"] = result["script"]
     ledger["timeline_events"] = result["spatial_events"]
-    ledger["spatial_events"]["geo_focus"] = [ev.get("geo_focus") for ev in result["spatial_events"]]
+    ledger["spatial_events"]["geo_focus"]  = [ev.get("geo_focus")      for ev in result["spatial_events"]]
     ledger["spatial_events"]["highlights"] = [ev.get("highlights", []) for ev in result["spatial_events"]]
-    ledger["spatial_events"]["overlays"] = [ev.get("overlays", []) for ev in result["spatial_events"]]
+    ledger["spatial_events"]["overlays"]   = [ev.get("overlays",   []) for ev in result["spatial_events"]]
     ledger["status"] = "lion_done"
     save_ledger(ledger)
 
