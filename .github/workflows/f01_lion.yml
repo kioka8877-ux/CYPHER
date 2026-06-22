@@ -34,11 +34,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
           mkdir -p /tmp/f01_in
-          BASE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.run_id }}"
-          wget -q \
-            --header="Authorization: token $GH_TOKEN" \
-            -O /tmp/f01_in/audio_raw.mp3 \
-            "${BASE_URL}/audio_raw.mp3"
+          gh release download "${{ github.event.inputs.run_id }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "audio_raw.mp3" \
+            --dir /tmp/f01_in
           echo "[F01A] audio_raw.mp3 — $(du -h /tmp/f01_in/audio_raw.mp3 | cut -f1) ✅"
 
       - name: F01A — Suppression silences
