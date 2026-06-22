@@ -1,7 +1,7 @@
 {
-  "run_id": "CYP_20260622_0342",
-  "created_at": "2026-06-22T03:42:13.701133",
-  "status": "lion_done",
+  "run_id": "CYP_20260622_0854",
+  "created_at": "2026-06-22T08:54:58.723247",
+  "status": "f01_running",
   "narrative": {
     "subject": "La chute de Constantinople 1453",
     "duration_seconds": 90,
@@ -199,12 +199,11 @@
     ]
   },
   "assets": {
-    "audio_raw": null,
-    "audio_clean": null,
-    "acier_path": null,
-    "preview_html": null
+    "audio_raw": "/tmp/CYPHER/F01_LION/IN/audio_raw.mp3",
+    "audio_clean": null
   },
   "gh_runs": {
+    "f01": 27941094887,
     "deathwing": null,
     "ravenwing": null,
     "luther": null
@@ -426,5 +425,19 @@
         }
       ]
     }
-  ]
+  ],
+  "format": "short",
+  "map_style": "satellite",
+  "visuals": {
+    "mode": "search",
+    "instructions": "logos de marques et entreprises mondiales style corporate PNG fond transparent"
+  },
+  "display": {
+    "font": "Cinzel",
+    "font_color": "#FFFFFF",
+    "font_size": 52,
+    "position": "bottom",
+    "animation": "ltr",
+    "visual_scale": 0.85
+  }
 }

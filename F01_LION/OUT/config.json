@@ -1,0 +1,33 @@
+{
+  "run_id": "CYP_20260622_0854",
+  "format": "short",
+  "map_style": "satellite",
+  "visuals": {
+    "mode": "search",
+    "instructions": "logos de marques et entreprises mondiales style corporate PNG fond transparent"
+  },
+  "map_config": {
+    "tile_provider": "esri_world_imagery",
+    "country_highlight": {
+      "type": "solid_fill_white_contour",
+      "fill_opacity": 0.75,
+      "border_color": "#FFFFFF",
+      "border_width": 3
+    },
+    "camera_behavior": "zoom_to_country_on_mention",
+    "visual_placement": "centered_over_highlighted_country",
+    "sfx_enabled": false,
+    "style_references": [
+      "STYLE/references/style_ref_satellite_base.png",
+      "STYLE/references/style_ref_country_highlight.png"
+    ]
+  },
+  "display": {
+    "font": "Cinzel",
+    "font_color": "#FFFFFF",
+    "font_size": 52,
+    "position": "bottom",
+    "animation": "ltr",
+    "visual_scale": 0.85
+  }
+}
