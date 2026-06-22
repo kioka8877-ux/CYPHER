@@ -25,6 +25,8 @@
 - [x] F01_LION v2 (Whisper transcription + timing.json + config.json — spec operateur complète)
 - [x] F01_LION v3 (dialogue interactif bloquant — 5 étapes opérateur, zéro args CLI)
 - [x] CYPHER_EXECUTEUR.py cmd_start simplifié (dialogue interactif, aucun arg CLI)
+- [x] f01_lion.yml — workflow GH Actions (pompé depuis CRUSADER f01_grimaldus.yml, chemins adaptés CYPHER)
+- [x] crs_f01a.py + crs_f01_grimaldus.py copiés dans F01_LION/CODEBASE/ (Whisper CPU int8 fallback)
 - [x] F02_CALIBAN v2 (preview HTML theme Imperivm)
 - [x] F03_DEATHWING workflow + code (cyp_deathwing.py + deathwing_render.yml)
 - [x] F04_RAVENWING workflow + code (cyp_ravenwing.py + ravenwing_assemble.yml)

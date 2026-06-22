@@ -1,0 +1,94 @@
+name: F01 LION — Audio + Transcription
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Identifiant unique du run (ex: CYP_20240101_1200)"
+        required: true
+
+jobs:
+  lion:
+    name: "F01A (silences) + F01B (Whisper)"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Vérification FFmpeg
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "[FFMPEG] ✅ $(ffmpeg -version 2>&1 | head -1)"
+          else
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
+
+      - name: Installer faster-whisper
+        run: pip install faster-whisper --quiet
+
+      - name: Télécharger audio depuis GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          mkdir -p /tmp/f01_in
+          BASE_URL="https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.run_id }}"
+          wget -q \
+            --header="Authorization: token $GH_TOKEN" \
+            -O /tmp/f01_in/audio_raw.mp3 \
+            "${BASE_URL}/audio_raw.mp3"
+          echo "[F01A] audio_raw.mp3 — $(du -h /tmp/f01_in/audio_raw.mp3 | cut -f1) ✅"
+
+      - name: F01A — Suppression silences
+        run: |
+          python3 -c "
+          import sys, json, os
+          sys.path.insert(0, 'F01_LION/CODEBASE')
+          from crs_f01a import remove_silences, detect_silences
+          os.makedirs('/tmp/f01_out', exist_ok=True)
+          print('[F01A] Suppression silences (-40dB)...')
+          remove_silences('/tmp/f01_in/audio_raw.mp3', '/tmp/f01_out/audio_clean.mp3', -40.0, 0.5)
+          silences = detect_silences('/tmp/f01_in/audio_raw.mp3', -40.0, 0.5)
+          with open('/tmp/f01_out/silence_map.json', 'w') as f:
+              json.dump({'silences': silences, 'silence_count': len(silences)}, f, indent=2)
+          print(f'[F01A] {len(silences)} silences supprimés — audio_clean.mp3 produit')
+          "
+
+      - name: F01B — Transcription Whisper
+        run: |
+          python3 F01_LION/CODEBASE/crs_f01_grimaldus.py \
+            --input /tmp/f01_out \
+            --output /tmp/f01_out \
+            --model medium
+
+      - name: Vérifier les sorties F01
+        run: |
+          echo "[F01] Artefacts produits :"
+          for F in audio_clean.mp3 timing.json silence_map.json; do
+            if [ -f "/tmp/f01_out/$F" ]; then
+              echo "  ✅ $F — $(du -h /tmp/f01_out/$F | cut -f1)"
+            else
+              echo "  ❌ $F — ABSENT"
+              exit 1
+            fi
+          done
+          python3 -c "
+          import json
+          with open('/tmp/f01_out/timing.json') as f:
+              t = json.load(f)
+          meta  = t.get('meta', {})
+          words = t.get('words', [])
+          print(f'[F01B] Durée: {meta.get(\"duration_seconds\", \"?\")}s | Frames: {meta.get(\"total_frames\", \"?\")} | Mots: {len(words)}')
+          "
+
+      - name: Upload artefacts F01
+        uses: actions/upload-artifact@v4
+        with:
+          name: f01-output
+          path: |
+            /tmp/f01_out/audio_clean.mp3
+            /tmp/f01_out/timing.json
+            /tmp/f01_out/silence_map.json
+          retention-days: 7
