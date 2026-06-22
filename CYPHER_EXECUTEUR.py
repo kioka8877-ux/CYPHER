@@ -38,6 +38,64 @@ def cmd_start(args):
     print("  → Puis : python CYPHER_EXECUTEUR.py gate2")
 
 
+def cmd_gate1_done(args):
+    """Télécharge timing.json + audio_clean.mp3 depuis l'artifact GH f01-output."""
+    ledger = load_ledger()
+    run_id = ledger.get("run_id", "")
+    gha_run_id = ledger.get("gh_runs", {}).get("f01")
+    if not run_id:
+        sys.exit("[CYPHER] Aucun run_id dans le ledger — lance d'abord 'start'")
+    if not gha_run_id:
+        sys.exit("[CYPHER] gh_runs.f01 absent — l'URL du run GH n'a pas été sauvegardée")
+
+    import os, requests, zipfile, io
+    token = os.environ.get("GH_TOKEN", "")
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+        "Accept-Encoding": "identity",
+    }
+    repo = "kioka8877-ux/CYPHER"
+    out_dir = Path(__file__).parent / "F01_LION" / "OUT"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Trouver l'artifact f01-output
+    url = f"https://api.github.com/repos/{repo}/actions/runs/{gha_run_id}/artifacts"
+    r = requests.get(url, headers=headers)
+    r.raise_for_status()
+    artifacts = r.json().get("artifacts", [])
+    artifact = next((a for a in artifacts if a["name"] == "f01-output"), None)
+    if not artifact:
+        sys.exit(f"[CYPHER] Artifact 'f01-output' introuvable sur le run {gha_run_id}")
+
+    # Télécharger le ZIP de l'artifact
+    print(f"[CYPHER] Téléchargement artifact f01-output ({artifact['size_in_bytes'] // 1024} KB)...")
+    dl_url = artifact["archive_download_url"]
+    r2 = requests.get(dl_url, headers=headers, allow_redirects=True)
+    r2.raise_for_status()
+
+    # Extraire
+    with zipfile.ZipFile(io.BytesIO(r2.content)) as zf:
+        zf.extractall(out_dir)
+    print(f"  ✅ Extraits dans {out_dir}")
+
+    # Vérifier
+    for fname in ("timing.json", "audio_clean.mp3"):
+        fpath = out_dir / fname
+        if fpath.exists():
+            print(f"  ✅ {fname} ({fpath.stat().st_size // 1024} KB)")
+        else:
+            print(f"  ⚠️  {fname} ABSENT")
+
+    # Mise à jour ledger
+    ledger["status"] = "f01_done"
+    ledger.setdefault("assets", {})["audio_clean"] = str(out_dir / "audio_clean.mp3")
+    save_ledger(ledger)
+
+    print("\n[CYPHER] GATE 1 validé — timing.json et audio_clean.mp3 en place.")
+    print("  → Lance : python CYPHER_EXECUTEUR.py gate2")
+
+
 def cmd_gate2(args):
     """GATE 2 — CALIBAN preview HTML Imperivm + config_final.json."""
     caliban = Path(__file__).parent / "F02_CALIBAN" / "CODEBASE" / "cyp_caliban.py"
@@ -90,6 +148,7 @@ def main():
     sub = parser.add_subparsers(dest="cmd")
 
     sub.add_parser("start")  # dialogue interactif — aucun arg CLI requis
+    sub.add_parser("gate1_done")  # télécharge artifacts f01 après run GH
 
     p_gate2 = sub.add_parser("gate2")
     p_gate2.add_argument("--port", type=int, default=8090)
@@ -100,6 +159,7 @@ def main():
     args = parser.parse_args()
     dispatch = {
         "start": cmd_start,
+        "gate1_done": cmd_gate1_done,
         "gate2": cmd_gate2,
         "gate3": cmd_gate3,
         "gate4": cmd_gate4,
