@@ -171,7 +171,8 @@ def main():
         if ret != 0:
             shutil.copy(audio_path, mp3_dest)
     else:
-        shutil.copy(audio_path, mp3_dest)
+        if audio_path.resolve() != mp3_dest.resolve():
+            shutil.copy(audio_path, mp3_dest)
     print(f"  ✅ audio_raw.mp3 ({mp3_dest.stat().st_size // 1024} KB)")
 
     # Visuals
