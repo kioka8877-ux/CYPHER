@@ -25,20 +25,26 @@ def save_ledger(data):
 
 
 def cmd_start(args):
-    """GATE 1 — brief opérateur → LION génère le script + spatial_events."""
+    """GATE 1 — operateur fournit audio + format + style → LION transcrit + genere timing/config."""
     lion = Path(__file__).parent / "F01_LION" / "CODEBASE" / "cyp_lion.py"
     cmd = [
         sys.executable, str(lion),
-        "--subject", args.subject,
-        "--duration", str(args.duration),
-        "--language", args.language,
-        "--tone", args.tone,
+        "--audio",       args.audio,
+        "--format",      args.format,
+        "--style-carte", args.style_carte,
     ]
-    print(f"[CYPHER] GATE 1 — LION oracle en cours...")
+    if args.visuals_zip:
+        cmd += ["--visuals-zip", args.visuals_zip]
+    elif args.visuals_search:
+        cmd += ["--visuals-search", args.visuals_search,
+                "--visual-count", str(args.visual_count)]
+    print("[CYPHER] GATE 1 — LION transcription + generation en cours...")
     result = subprocess.run(cmd, env={**os.environ})
     if result.returncode != 0:
-        sys.exit("[CYPHER] LION a échoué — vérifier les logs")
-    print("\n[CYPHER] GATE 1 terminé. Valide le script dans le ledger puis lance: gate2")
+        sys.exit("[CYPHER] LION a echoue — verifier les logs")
+    print("\n[CYPHER] GATE 1 termine.")
+    print("  → Valide F01_LION/OUT/timing.json + config.json")
+    print("  → Puis : python CYPHER_EXECUTEUR.py gate2")
 
 
 def cmd_gate2(args):
@@ -91,10 +97,12 @@ def main():
     sub = parser.add_subparsers(dest="cmd")
 
     p_start = sub.add_parser("start")
-    p_start.add_argument("--subject", required=True)
-    p_start.add_argument("--duration", type=int, default=90)
-    p_start.add_argument("--language", default="fr")
-    p_start.add_argument("--tone", default="dramatique")
+    p_start.add_argument("--audio",          required=True,  help="Chemin vers audio.mp3/.wav")
+    p_start.add_argument("--format",         required=True,  choices=["short", "long"])
+    p_start.add_argument("--style-carte",    required=True,  help="osm|satellite|dark|terrain")
+    p_start.add_argument("--visuals-zip",    default=None,   help="ZIP d'images fourni par l'operateur")
+    p_start.add_argument("--visuals-search", default=None,   help="Instructions recherche internet")
+    p_start.add_argument("--visual-count",   type=int, default=8)
 
     p_gate2 = sub.add_parser("gate2")
     p_gate2.add_argument("--port", type=int, default=8090)

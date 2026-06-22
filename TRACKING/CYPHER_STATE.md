@@ -21,8 +21,10 @@
 - [x] CYPHER_STYLE.py (palette Dark Angels)
 - [x] cypher_ledger.json schema
 - [x] CYPHER_EXECUTEUR.py (orchestrateur gates, stubs)
-- [x] F01_LION code (cyp_lion.py — oracle AI Gateway + ledger)
-- [x] F02_CALIBAN code (cyp_caliban.py — acier.py generator + preview HTML dark-theme)
+- [x] F01_LION v1 (oracle AI Gateway — remplacé)
+- [x] F01_LION v2 (Whisper transcription + timing.json + config.json — spec operateur complète)
+- [x] CYPHER_EXECUTEUR.py cmd_start mis a jour (audio/format/style-carte/visuals)
+- [ ] F02_CALIBAN v2 (preview HTML theme Imperivm — en cours)
 - [x] F03_DEATHWING workflow + code (cyp_deathwing.py + deathwing_render.yml)
 - [x] F04_RAVENWING workflow + code (cyp_ravenwing.py + ravenwing_assemble.yml)
 - [x] F05_LUTHER workflow + code (cyp_luther.py + luther_purge.yml — port depuis CRUSADER)
