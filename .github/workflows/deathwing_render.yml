@@ -10,7 +10,7 @@ on:
 jobs:
   render:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -34,22 +34,47 @@ jobs:
       - name: Install Manim + ATLAS
         run: |
           pip install manim==0.20.1
-          pip install git+https://github.com/kioka8877-ux/ATLAS.git
+          pip install git+https://github.com/kioka8877-ux/ATLAS.git || true
 
-      - name: Download acier.py from release
+      - name: Download render_spec.json + visuels from release
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          mkdir -p render_workspace
+          mkdir -p render_workspace/visuals
+          # Télécharger render_spec.json
           gh release download "cyp-${{ inputs.run_id }}" \
             --repo ${{ github.repository }} \
-            --pattern "acier.py" \
+            --pattern "render_spec.json" \
             --dir render_workspace
+          # Télécharger les visuels (PNG/JPG/GIF/MP4) s'ils existent
+          gh release download "cyp-${{ inputs.run_id }}" \
+            --repo ${{ github.repository }} \
+            --pattern "*.png" \
+            --dir render_workspace/visuals || true
+          gh release download "cyp-${{ inputs.run_id }}" \
+            --repo ${{ github.repository }} \
+            --pattern "*.jpg" \
+            --dir render_workspace/visuals || true
+          gh release download "cyp-${{ inputs.run_id }}" \
+            --repo ${{ github.repository }} \
+            --pattern "*.gif" \
+            --dir render_workspace/visuals || true
+          gh release download "cyp-${{ inputs.run_id }}" \
+            --repo ${{ github.repository }} \
+            --pattern "*.mp4" \
+            --dir render_workspace/visuals || true
+          echo "[DEATHWING] Assets téléchargés :"
+          ls -lh render_workspace/
+          ls -lh render_workspace/visuals/ || true
+
+      - name: Copy CypherScene.py to render workspace
+        run: |
+          cp F03_DEATHWING/CODEBASE/CypherScene.py render_workspace/CypherScene.py
 
       - name: Render CypherScene
         run: |
           cd render_workspace
-          python -m manim acier.py CypherScene \
+          python -m manim CypherScene.py CypherScene \
             --format mp4 \
             --fps 30 \
             --media_dir ./media \

@@ -1,6 +1,6 @@
 """
 F03 DEATHWING — Déclencheur sandbox
-Upload acier.py sur GH Release → trigger deathwing_render.yml → print URL
+Upload render_spec.json + visuels sur GH Release → trigger deathwing_render.yml → print URL
 """
 import json
 import os
@@ -8,10 +8,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-BASE = Path(__file__).parent.parent.parent
-LEDGER_PATH = BASE / "cypher_ledger.json"
-REPO = "kioka8877-ux/CYPHER"
-ACIER_PATH = BASE / "F02_CALIBAN" / "OUT" / "acier.py"
+BASE         = Path(__file__).parent.parent.parent
+LEDGER_PATH  = BASE / "cypher_ledger.json"
+REPO         = "kioka8877-ux/CYPHER"
+RENDER_SPEC  = BASE / "F02_CALIBAN" / "OUT" / "render_spec.json"
+VISUALS_DIR  = BASE / "F01_LION" / "OUT" / "visuals"
 
 
 def load_ledger():
@@ -33,21 +34,26 @@ def gh(cmd, check=True, capture=False):
     return subprocess.run(cmd, **kwargs)
 
 
-def upload_acier(run_id: str) -> str:
-    """Upload acier.py sur la release GH taggée avec run_id. Retourne le tag."""
+def upload_assets(run_id: str) -> str:
+    """Upload render_spec.json + visuels sur la release GH. Retourne le tag."""
     tag = f"cyp-{run_id}"
-    # Supprimer release existante si elle existe (re-run)
-    gh(["gh", "release", "delete", tag, "--repo", REPO, "--yes"],
-       check=False)
-    # Créer la release
+    gh(["gh", "release", "delete", tag, "--repo", REPO, "--yes"], check=False)
+
+    # Collecter les fichiers à uploader
+    assets = [str(RENDER_SPEC)]
+    if VISUALS_DIR.exists():
+        for f in VISUALS_DIR.iterdir():
+            if f.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".mp4", ".webm"):
+                assets.append(str(f))
+
     gh([
         "gh", "release", "create", tag,
         "--repo", REPO,
         "--title", f"CYPHER run {run_id}",
         "--notes", "Assets intermédiaires CYPHER — auto-généré",
-        str(ACIER_PATH),
+        *assets,
     ])
-    print(f"[DEATHWING] acier.py uploadé → release {tag}")
+    print(f"[DEATHWING] {len(assets)} assets uploadés → release {tag}")
     return tag
 
 
@@ -58,7 +64,6 @@ def trigger_workflow(run_id: str) -> str:
         "--repo", REPO,
         "--field", f"run_id={run_id}",
     ])
-    # Récupérer l'URL du run le plus récent
     import time; time.sleep(4)
     result = gh(
         ["gh", "run", "list", "--workflow", "deathwing_render.yml",
@@ -71,16 +76,16 @@ def trigger_workflow(run_id: str) -> str:
 
 
 def main():
-    if not ACIER_PATH.exists():
-        sys.exit("[DEATHWING] Erreur : acier.py introuvable. Lance gate2 d'abord.")
+    if not RENDER_SPEC.exists():
+        sys.exit("[DEATHWING] Erreur : render_spec.json introuvable. Lance gate2 d'abord.")
 
     ledger = load_ledger()
     run_id = ledger.get("run_id")
     if not run_id:
         sys.exit("[DEATHWING] Erreur : run_id absent du ledger. Lance start d'abord.")
 
-    print(f"[DEATHWING] Run {run_id} — upload acier...")
-    upload_acier(run_id)
+    print(f"[DEATHWING] Run {run_id} — upload render_spec + visuels...")
+    upload_assets(run_id)
 
     print("[DEATHWING] Trigger GitHub Actions...")
     url = trigger_workflow(run_id)
