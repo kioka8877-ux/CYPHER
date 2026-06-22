@@ -48,10 +48,12 @@ def cmd_start(args):
 
 
 def cmd_gate2(args):
-    """GATE 2 — CALIBAN génère acier.py + preview HTML opérateur."""
+    """GATE 2 — CALIBAN preview HTML Imperivm + config_final.json."""
     caliban = Path(__file__).parent / "F02_CALIBAN" / "CODEBASE" / "cyp_caliban.py"
-    cmd = [sys.executable, str(caliban), "--serve", "--port", str(args.port)]
-    print("[CYPHER] GATE 2 — CALIBAN en cours (acier + preview)...")
+    cmd = [sys.executable, str(caliban), "--port", str(args.port)]
+    print("[CYPHER] GATE 2 — CALIBAN preview (thème Imperivm)...")
+    print(f"[CYPHER] Ouvre → http://localhost:{args.port}")
+    print("[CYPHER] Ajuste les paramètres et clique VALIDER pour Gate 3")
     result = subprocess.run(cmd, env={**os.environ})
     if result.returncode != 0:
         sys.exit("[CYPHER] CALIBAN a échoué — vérifier les logs")

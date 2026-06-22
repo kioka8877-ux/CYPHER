@@ -1,360 +1,337 @@
+#!/usr/bin/env python3
 """
-F02 CALIBAN — Traducteur dict→acier ManimCE + preview HTML
-Lit lion_output.json, génère acier.py (code ManimCE exécutable) et preview.html
+F02 CALIBAN — Preview HTML Imperivm + contrôles éditables
+Lit timing.json + config.json (F01), génère preview.html interactif.
+L'opérateur modifie les paramètres visuels et valide → config_final.json.
 """
-import argparse
+
 import json
 import os
 import sys
-import datetime
 import http.server
 import threading
-import webbrowser
 from pathlib import Path
 
-BASE = Path(__file__).parent.parent.parent
-LEDGER_PATH = BASE / "cypher_ledger.json"
-STYLE_PATH = BASE / "STYLE" / "CYPHER_STYLE.py"
+BASE        = Path(__file__).resolve().parents[3]
+LION_OUT    = BASE / "F01_LION" / "OUT"
+CALIBAN_OUT = BASE / "F02_CALIBAN" / "OUT"
+
+TIMING_PATH  = LION_OUT / "timing.json"
+CONFIG_PATH  = LION_OUT / "config.json"
+PREVIEW_PATH = CALIBAN_OUT / "preview.html"
+CONFIG_FINAL = CALIBAN_OUT / "config_final.json"
+
+FONTS = [
+    "Arrila Black", "Cinzel", "Cinzel Decorative",
+    "IM Fell English", "Crimson Text", "MedievalSharp",
+    "Arial", "Impact",
+]
+SUBTITLE_ANIMATIONS = [
+    ("fade", "Fondu"), ("left", "Gauche → Droite"),
+    ("right", "Droite → Gauche"), ("up", "Bas → Haut"),
+    ("typewriter", "Machine à écrire"), ("none", "Aucune"),
+]
+MAP_STYLES = [
+    ("dark", "Sombre (Dark Angels)"), ("satellite", "Satellite"),
+    ("relief", "Relief"), ("vintage", "Vintage / Vieux papier"),
+    ("military", "Militaire (topo)"),
+]
 
 
-def load_ledger():
-    with open(LEDGER_PATH) as f:
-        return json.load(f)
+def build_preview(timing: dict, config: dict) -> str:
+    segments  = timing.get("segments", [])
+    words     = timing.get("words", [])
+    meta      = timing.get("meta", {})
+    vis_list  = config.get("visuals", [])
+    cfg       = config.get("display", {})
+    fmt       = config.get("format", "short")
 
+    sub_font  = cfg.get("subtitle_font", "Cinzel")
+    sub_color = cfg.get("subtitle_color", "#FFFFFF")
+    sub_size  = cfg.get("subtitle_size", 36)
+    sub_pos   = cfg.get("subtitle_position", "bottom")
+    sub_anim  = cfg.get("subtitle_animation", "left")
+    sub_speed = cfg.get("subtitle_speed", 1.0)
+    v_scale   = cfg.get("visual_scale", 1.0)
+    map_style = cfg.get("map_style", "dark")
 
-def save_ledger(data):
-    with open(LEDGER_PATH, "w") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    def opts(items, cur):
+        return "".join(
+            f'<option value="{v}"{" selected" if v == cur else ""}>{l}</option>'
+            for v, l in items
+        )
 
+    fonts_opts = "".join(
+        f'<option value="{f}"{" selected" if f == sub_font else ""}>{f}</option>'
+        for f in FONTS
+    )
+    fmt_opts = opts([("short","Short"),("long","Long")], fmt)
+    map_opts = opts(MAP_STYLES, map_style)
+    anim_opts = opts(SUBTITLE_ANIMATIONS, sub_anim)
+    pos_opts  = opts([("bottom","Bas"),("center","Centre"),("top","Haut")], sub_pos)
 
-# ---------------------------------------------------------------------------
-# ACIER GENERATOR
-# ---------------------------------------------------------------------------
-
-ACIER_HEADER = '''\
-"""
-CYPHER Acier — généré automatiquement par CALIBAN
-Run : python -m manim acier.py CypherScene -o output.mp4 --fps 30
-"""
-from manim import *
-import json
-from pathlib import Path
-
-try:
-    from atlas.primitives.geo import GeoScene
-    from atlas.primitives.overlay import TextOverlay
-    from atlas.clock.temporal import TemporalClock
-    ATLAS_OK = True
-except ImportError:
-    ATLAS_OK = False
-
-STYLE = {
-    "bg": "#050B08",
-    "alert": "#B30006",
-    "neutral": "#1A2E25",
-    "text": "#E8E0D0",
-    "grid": "#0F2018",
-}
-
-EVENTS = {events_json}
-
-SCRIPT = {script_json}
-
-'''
-
-ACIER_SCENE = '''\
-class CypherScene(Scene):
-    def construct(self):
-        self.camera.background_color = STYLE["bg"]
-
-        if ATLAS_OK:
-            self._construct_atlas()
-        else:
-            self._construct_fallback()
-
-    def _construct_atlas(self):
-        """Rendu complet via ATLAS (ManimCE + géo)."""
-        for i, ev in enumerate(EVENTS):
-            gf = ev["geo_focus"]
-            scene = GeoScene(
-                lat=gf["lat"], lon=gf["lon"], zoom=gf.get("zoom", 4),
-                width=14, height=8
-            )
-            # Highlights
-            for h in ev.get("highlights", []):
-                scene.highlight(h["iso"], color=h.get("color", STYLE["alert"]),
-                                opacity=h.get("opacity", 0.6))
-
-            duration = ev["t_end"] - ev["t_start"]
-            sub = self._get_subtitle(ev["t_start"], ev["t_end"])
-
-            if i == 0:
-                self.play(FadeIn(scene), run_time=0.5)
-            else:
-                self.play(FadeTransform(prev_scene, scene), run_time=0.8)
-
-            if sub:
-                txt = Text(sub, font_size=24, color=STYLE["text"]).to_edge(DOWN).shift(UP * 0.3)
-                self.play(FadeIn(txt), run_time=0.3)
-                self.wait(max(0.5, duration - 1.2))
-                self.play(FadeOut(txt), run_time=0.3)
-            else:
-                self.wait(max(0.2, duration - 0.8))
-
-            prev_scene = scene
-
-        self.play(FadeOut(prev_scene), run_time=0.5)
-
-    def _construct_fallback(self):
-        """Rendu simplifié sans ATLAS (rectangles colorés)."""
-        for i, ev in enumerate(EVENTS):
-            gf = ev["geo_focus"]
-            duration = ev["t_end"] - ev["t_start"]
-            sub = self._get_subtitle(ev["t_start"], ev["t_end"])
-
-            bg = Rectangle(width=14, height=8, fill_color=STYLE["neutral"],
-                            fill_opacity=1, stroke_width=0)
-            coords = Text(
-                f"lat={gf['lat']:.1f}  lon={gf['lon']:.1f}  zoom={gf.get('zoom',4)}",
-                font_size=18, color=STYLE["alert"]
-            ).to_edge(UP).shift(DOWN * 0.3)
-
-            highlights = ev.get("highlights", [])
-            bars = VGroup()
-            for j, h in enumerate(highlights[:5]):
-                r = Rectangle(width=1.2, height=0.5,
-                               fill_color=h.get("color", STYLE["alert"]),
-                               fill_opacity=0.8, stroke_width=0)
-                label = Text(h["iso"], font_size=16, color=WHITE)
-                group = VGroup(r, label).arrange(DOWN, buff=0.05)
-                group.shift(RIGHT * (j * 1.5 - 3))
-                bars.add(group)
-            bars.next_to(coords, DOWN)
-
-            group = VGroup(bg, coords, bars)
-            if sub:
-                txt = Text(sub[:120], font_size=22, color=STYLE["text"]).to_edge(DOWN).shift(UP * 0.3)
-                group.add(txt)
-
-            if i == 0:
-                self.play(FadeIn(group), run_time=0.5)
-                self.wait(max(0.2, duration - 0.8))
-            else:
-                self.play(FadeTransform(prev_group, group), run_time=0.5)
-                self.wait(max(0.2, duration - 0.8))
-            prev_group = group
-
-        self.play(FadeOut(prev_group), run_time=0.5)
-
-    def _get_subtitle(self, t_start: float, t_end: float) -> str:
-        """Découpe le script selon les timestamps d'événement."""
-        total_dur = EVENTS[-1]["t_end"] if EVENTS else 1
-        words = SCRIPT.split()
-        if not words or total_dur == 0:
-            return ""
-        start_ratio = t_start / total_dur
-        end_ratio = t_end / total_dur
-        start_i = int(start_ratio * len(words))
-        end_i = int(end_ratio * len(words))
-        return " ".join(words[start_i:end_i])
-'''
-
-
-def build_acier(events: list, script: str) -> str:
-    events_json = json.dumps(events, indent=2, ensure_ascii=False)
-    script_json = json.dumps(script, ensure_ascii=False)
-    return (ACIER_HEADER.replace("{events_json}", events_json)
-                        .replace("{script_json}", script_json)) + ACIER_SCENE
-
-
-# ---------------------------------------------------------------------------
-# PREVIEW HTML GENERATOR
-# ---------------------------------------------------------------------------
-
-def lat_lon_to_pct(lat: float, lon: float):
-    """Projection équirectangulaire → pourcentage sur SVG 360×180."""
-    x = (lon + 180) / 360 * 100
-    y = (90 - lat) / 180 * 100
-    return round(x, 2), round(y, 2)
-
-
-def build_preview_html(events: list, script: str, subject: str, run_id: str) -> str:
-    words = script.split()
-    total_dur = events[-1]["t_end"] if events else 1
-
-    segments_html = ""
-    for i, ev in enumerate(events):
-        gf = ev.get("geo_focus", {})
-        lat = gf.get("lat", 0)
-        lon = gf.get("lon", 0)
-        zoom = gf.get("zoom", 4)
-        t0 = ev.get("t_start", 0)
-        t1 = ev.get("t_end", 0)
-        dur = t1 - t0
-
-        # Sous-titre extrait
-        start_ratio = t0 / total_dur
-        end_ratio = t1 / total_dur
-        si = int(start_ratio * len(words))
-        ei = int(end_ratio * len(words))
-        sub = " ".join(words[si:ei]) if words else ""
-
-        # Highlights pills
-        pills = ""
-        for h in ev.get("highlights", []):
-            iso = h.get("iso", "?")
-            color = h.get("color", "#B30006")
-            pills += f'<span style="background:{color};color:#fff;padding:2px 8px;border-radius:3px;margin:2px;font-size:12px">{iso}</span>'
-
-        # Dot sur mini-map
-        px, py = lat_lon_to_pct(lat, lon)
-        dot_size = max(6, min(20, int(40 / zoom)))
-
-        segments_html += f"""
+    seg_cards = ""
+    for i, seg in enumerate(segments):
+        vis = vis_list[i] if i < len(vis_list) else {}
+        ev  = seg.get("event", {})
+        geo = ev.get("geo_focus", {})
+        hl  = ev.get("highlights", [])
+        sfx = ev.get("sfx", False)
+        hl_html = "".join(f'<span class="pill">{h}</span>' for h in hl) or '<span class="pill dim">—</span>'
+        seg_cards += f"""
         <div class="seg-card" id="seg-{i}">
-          <div class="seg-header">
-            <span class="seg-index">SEG {i:02d}</span>
-            <span class="seg-time">{t0:.1f}s → {t1:.1f}s ({dur:.1f}s)</span>
-            <span class="seg-coords">lat={lat:.2f} lon={lon:.2f} zoom={zoom}</span>
+          <div class="seg-hdr">
+            <span class="seg-num">#{i+1}</span>
+            <span class="seg-t">{seg.get('start_clean',0):.1f}s–{seg.get('end_clean',0):.1f}s</span>
+            <span class="sfx-btn {'sfx-on' if sfx else 'sfx-off'}" onclick="toggleSfx({i})">
+              {'SFX ●' if sfx else 'SFX ○'}</span>
           </div>
-          <div class="seg-body">
-            <div class="minimap-wrap">
-              <div class="minimap">
-                <div class="dot" style="left:{px}%;top:{py}%;width:{dot_size}px;height:{dot_size}px"></div>
-              </div>
-              <div class="highlights">{pills}</div>
-            </div>
-            <div class="sub-text">{sub}</div>
-          </div>
-        </div>
-        """
+          <div class="seg-txt">"{seg.get('text','')}"</div>
+          <div class="seg-meta">🗺 {geo.get('country','—')} · {geo.get('lat','—')}/{geo.get('lon','—')}</div>
+          <div class="seg-meta">🖼 {vis.get('file','—')} ({vis.get('type','image')})</div>
+          <div class="seg-hl">{hl_html}</div>
+        </div>"""
+
+    word_chips = " ".join(
+        f'<span class="wc" title="{w.get("start",0):.2f}s">{w.get("word","")}</span>'
+        for w in words[:80]
+    )
+    if len(words) > 80:
+        word_chips += f' <span class="wc dim">… +{len(words)-80}</span>'
+
+    dur = meta.get("duration_seconds", 0)
+    fps = meta.get("fps", 30)
+    fr  = meta.get("total_frames", 0)
 
     return f"""<!DOCTYPE html>
-<html lang="fr">
-<head>
+<html lang="fr"><head>
 <meta charset="UTF-8">
-<title>CALIBAN Preview — {subject}</title>
+<title>CYPHER — Gate 2</title>
 <style>
-  :root{{--bg:#050B08;--bg2:#0F1A12;--bg3:#1A2E25;--alert:#B30006;--text:#E8E0D0;--muted:#6B8F71}}
-  *{{box-sizing:border-box;margin:0;padding:0}}
-  body{{background:var(--bg);color:var(--text);font-family:monospace;padding:20px}}
-  header{{border-bottom:1px solid var(--alert);padding-bottom:12px;margin-bottom:20px}}
-  h1{{font-size:22px;color:var(--alert);letter-spacing:2px}}
-  .meta{{color:var(--muted);font-size:12px;margin-top:4px}}
-  .script-box{{background:var(--bg2);border-left:3px solid var(--alert);padding:12px;
-    margin-bottom:24px;font-size:13px;line-height:1.7;max-height:140px;overflow:auto}}
-  .seg-card{{background:var(--bg2);border:1px solid var(--bg3);border-radius:4px;
-    margin-bottom:12px;overflow:hidden}}
-  .seg-header{{background:var(--bg3);padding:8px 12px;display:flex;gap:16px;align-items:center}}
-  .seg-index{{color:var(--alert);font-weight:bold;min-width:50px}}
-  .seg-time{{color:var(--muted);font-size:12px}}
-  .seg-coords{{color:var(--text);font-size:11px;margin-left:auto}}
-  .seg-body{{padding:10px 12px;display:flex;gap:12px;align-items:flex-start}}
-  .minimap-wrap{{min-width:160px}}
-  .minimap{{position:relative;width:160px;height:80px;background:#0a1f10;
-    border:1px solid var(--bg3);border-radius:2px;overflow:hidden}}
-  .minimap::before{{content:'';position:absolute;inset:0;
-    background:repeating-linear-gradient(0deg,transparent,transparent 19px,#1a2e2550 19px,#1a2e2550 20px),
-    repeating-linear-gradient(90deg,transparent,transparent 19px,#1a2e2550 19px,#1a2e2550 20px)}}
-  .dot{{position:absolute;background:var(--alert);border-radius:50%;transform:translate(-50%,-50%);
-    box-shadow:0 0 6px var(--alert)}}
-  .highlights{{margin-top:6px;display:flex;flex-wrap:wrap;gap:2px}}
-  .sub-text{{flex:1;font-size:13px;line-height:1.6;color:var(--text);padding-top:4px;
-    border-left:2px solid var(--bg3);padding-left:10px}}
-  footer{{margin-top:24px;color:var(--muted);font-size:11px;border-top:1px solid var(--bg3);padding-top:8px}}
-</style>
-</head>
-<body>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Cinzel+Decorative:wght@400;700&family=Crimson+Text:ital,wght@0,400;1,400&display=swap');
+:root{{--bg:#050B08;--panel:#0D1A14;--card:#111E17;--red:#B30006;--gold:#C9A84C;--txt:#D4C5A9;--dim:#506050;--grn:#1A5C32}}
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:var(--bg);color:var(--txt);font-family:'Crimson Text',serif;min-height:100vh}}
+header{{background:linear-gradient(90deg,#000,#0a1a0e 50%,#000);border-bottom:2px solid var(--gold);padding:14px 28px;display:flex;align-items:center;justify-content:space-between}}
+header h1{{font-family:'Cinzel Decorative',serif;font-size:1.5rem;color:var(--gold);letter-spacing:.15em}}
+header .m{{font-size:.8rem;color:var(--dim)}}
+.layout{{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 58px);overflow:hidden}}
+.left{{background:var(--panel);border-right:1px solid #1a2e1a;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px}}
+.sec{{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.2em;color:var(--gold);text-transform:uppercase;padding-bottom:5px;border-bottom:1px solid #1a2e1a;margin-bottom:8px}}
+label{{display:block;font-size:.8rem;color:var(--dim);margin-top:8px;margin-bottom:3px}}
+select,input[type=color],input[type=text]{{width:100%;background:#0a1a0e;border:1px solid #1a2e1a;color:var(--txt);padding:6px 10px;border-radius:3px;font-family:inherit;font-size:.88rem}}
+input[type=range]{{width:100%;accent-color:var(--gold);cursor:pointer}}
+.rrow{{display:flex;gap:8px;align-items:center}}
+.rrow span{{min-width:38px;text-align:right;color:var(--gold);font-size:.82rem}}
+.btn-v{{width:100%;padding:13px;margin-top:6px;background:var(--red);color:#fff;border:none;cursor:pointer;font-family:'Cinzel',serif;font-size:.85rem;letter-spacing:.15em;text-transform:uppercase;border-radius:3px}}
+.btn-v:hover{{background:#8a0004}}
+.btn-e{{width:100%;padding:9px;margin-top:4px;background:#0d2b1a;color:var(--gold);border:1px solid var(--gold);cursor:pointer;font-family:'Cinzel',serif;font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;border-radius:3px}}
+.subp{{background:#111;border:1px solid #1a2e1a;border-radius:4px;min-height:72px;display:flex;align-items:flex-end;justify-content:center;padding:10px;overflow:hidden}}
+.subp.ctr{{align-items:center}}
+.sub-demo{{font-size:36px;color:#fff;text-shadow:0 2px 8px #000;text-align:center;max-width:90%;transition:all .2s}}
+.right{{overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:18px}}
+.stat-bar{{display:flex;gap:20px;flex-wrap:wrap;background:var(--card);border:1px solid #1a2e1a;border-radius:4px;padding:12px 18px;font-size:.8rem}}
+.stat{{display:flex;flex-direction:column}}.stat span{{color:var(--gold);font-family:'Cinzel',serif;font-size:.95rem}}
+.wbox{{background:var(--card);border:1px solid #1a2e1a;border-radius:4px;padding:12px;line-height:2.2}}
+.wc{{display:inline-block;background:#0d2b1a;color:var(--txt);padding:1px 5px;border-radius:2px;font-size:.8rem;cursor:default}}
+.wc:hover{{background:var(--grn)}}.wc.dim{{color:var(--dim)}}
+.sg{{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}}
+.seg-card{{background:var(--card);border:1px solid #1a2e1a;border-radius:4px;padding:12px;display:flex;flex-direction:column;gap:6px}}
+.seg-hdr{{display:flex;align-items:center;gap:7px}}
+.seg-num{{font-family:'Cinzel',serif;color:var(--gold);font-size:.78rem;min-width:26px}}
+.seg-t{{font-size:.75rem;color:var(--dim)}}
+.sfx-btn{{margin-left:auto;font-size:.72rem;cursor:pointer;padding:2px 7px;border-radius:2px}}
+.sfx-on{{background:#1a3a1a;color:#4caf50}}.sfx-off{{background:#1a0f0f;color:var(--dim)}}
+.seg-txt{{font-style:italic;font-size:.88rem;line-height:1.4}}
+.seg-meta{{font-size:.74rem;color:var(--dim)}}
+.seg-hl{{display:flex;flex-wrap:wrap;gap:3px}}
+.pill{{background:#0d2b1a;color:var(--gold);padding:1px 7px;border-radius:10px;font-size:.72rem;font-family:'Cinzel',serif}}
+.pill.dim{{background:#111;color:var(--dim)}}
+.sec-lbl{{font-family:'Cinzel',serif;font-size:.7rem;letter-spacing:.15em;color:var(--gold);text-transform:uppercase;margin-bottom:8px}}
+.toast{{position:fixed;bottom:28px;right:28px;background:#1a5c32;color:#fff;padding:11px 22px;border-radius:4px;font-family:'Cinzel',serif;font-size:.82rem;opacity:0;transition:opacity .3s;pointer-events:none;z-index:9999}}
+.toast.show{{opacity:1}}
+</style></head><body>
 <header>
-  <h1>CALIBAN PREVIEW</h1>
-  <div class="meta">run_id: {run_id} | sujet: {subject} | {len(events)} événements | généré: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
+  <h1>⚔ CYPHER — Gate 2</h1>
+  <span class="m">Format: {fmt.upper()} &nbsp;|&nbsp; {dur:.1f}s &nbsp;|&nbsp; {fr} frames @ {fps}fps &nbsp;|&nbsp; {len(segments)} segments</span>
 </header>
-<div class="script-box">{script}</div>
-{segments_html}
-<footer>CYPHER · CALIBAN F02 · Validé ici → DEATHWING se déclenche (gate3)</footer>
-</body>
-</html>"""
+<div class="layout">
+<div class="left">
+  <div>
+    <div class="sec">Format & Carte</div>
+    <label>Format vidéo</label><select id="ctl-fmt">{fmt_opts}</select>
+    <label>Style de carte</label><select id="ctl-map">{map_opts}</select>
+  </div>
+  <div>
+    <div class="sec">Sous-titres</div>
+    <label>Police</label><select id="ctl-font">{fonts_opts}</select>
+    <label>Couleur</label><input type="color" id="ctl-color" value="{sub_color}">
+    <label>Taille (px)</label>
+    <div class="rrow"><input type="range" id="ctl-size" min="18" max="72" value="{sub_size}"><span id="sz-v">{sub_size}</span></div>
+    <label>Position</label><select id="ctl-pos">{pos_opts}</select>
+    <label>Animation</label><select id="ctl-anim">{anim_opts}</select>
+    <label>Vitesse</label>
+    <div class="rrow"><input type="range" id="ctl-spd" min="0.5" max="3" step="0.1" value="{sub_speed}"><span id="spd-v">{sub_speed:.1f}x</span></div>
+  </div>
+  <div>
+    <div class="sec">Visuels</div>
+    <label>Échelle</label>
+    <div class="rrow"><input type="range" id="ctl-scl" min="0.5" max="1.5" step="0.05" value="{v_scale}"><span id="scl-v">{v_scale:.2f}x</span></div>
+  </div>
+  <div>
+    <div class="sec">Aperçu sous-titre</div>
+    <div class="subp" id="subp"><div class="sub-demo" id="sdemo">La chute de Constantinople</div></div>
+  </div>
+  <div>
+    <button class="btn-v" onclick="save()">✓ VALIDER — GATE 2</button>
+    <button class="btn-e" onclick="exportCfg()">⬇ Exporter config_final.json</button>
+  </div>
+</div>
+<div class="right">
+  <div class="stat-bar">
+    <div class="stat">Audio<span>{dur:.1f}s</span></div>
+    <div class="stat">Frames<span>{fr}</span></div>
+    <div class="stat">FPS<span>{fps}</span></div>
+    <div class="stat">Segments<span>{len(segments)}</span></div>
+    <div class="stat">Visuels<span>{len(vis_list)}</span></div>
+  </div>
+  <div>
+    <div class="sec-lbl">Timeline mots</div>
+    <div class="wbox">{word_chips}</div>
+  </div>
+  <div>
+    <div class="sec-lbl">Segments ({len(segments)})</div>
+    <div class="sg">{seg_cards}</div>
+  </div>
+</div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const sfxState={{}};
+function toggleSfx(i){{
+  sfxState[i]=!sfxState[i];
+  const el=document.getElementById('seg-'+i).querySelector('.sfx-btn');
+  el.className='sfx-btn '+(sfxState[i]?'sfx-on':'sfx-off');
+  el.textContent=sfxState[i]?'SFX ●':'SFX ○';
+}}
+function upPreview(){{
+  const d=document.getElementById('sdemo');
+  const p=document.getElementById('subp');
+  const font=document.getElementById('ctl-font').value;
+  const color=document.getElementById('ctl-color').value;
+  const size=document.getElementById('ctl-size').value;
+  const pos=document.getElementById('ctl-pos').value;
+  d.style.fontFamily="'"+font+"',serif";
+  d.style.color=color;
+  d.style.fontSize=size+'px';
+  p.className='subp'+(pos==='center'?' ctr':'');
+  document.getElementById('sz-v').textContent=size;
+}}
+document.getElementById('ctl-font').addEventListener('change',upPreview);
+document.getElementById('ctl-color').addEventListener('input',upPreview);
+document.getElementById('ctl-size').addEventListener('input',upPreview);
+document.getElementById('ctl-pos').addEventListener('change',upPreview);
+document.getElementById('ctl-spd').addEventListener('input',()=>{{
+  document.getElementById('spd-v').textContent=parseFloat(document.getElementById('ctl-spd').value).toFixed(1)+'x';
+}});
+document.getElementById('ctl-scl').addEventListener('input',()=>{{
+  document.getElementById('scl-v').textContent=parseFloat(document.getElementById('ctl-scl').value).toFixed(2)+'x';
+}});
+function getCfg(){{
+  return{{
+    format:document.getElementById('ctl-fmt').value,
+    display:{{
+      map_style:document.getElementById('ctl-map').value,
+      subtitle_font:document.getElementById('ctl-font').value,
+      subtitle_color:document.getElementById('ctl-color').value,
+      subtitle_size:parseInt(document.getElementById('ctl-size').value),
+      subtitle_position:document.getElementById('ctl-pos').value,
+      subtitle_animation:document.getElementById('ctl-anim').value,
+      subtitle_speed:parseFloat(document.getElementById('ctl-spd').value),
+      visual_scale:parseFloat(document.getElementById('ctl-scl').value),
+    }},
+    sfx_overrides:sfxState,
+  }};
+}}
+function toast(msg){{
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2500);
+}}
+function save(){{
+  fetch('/api/save',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(getCfg())}})
+  .then(r=>r.json()).then(d=>{{
+    if(d.ok)toast('✓ Config sauvegardée — Gate 2 validée');
+    else toast('Erreur : '+d.error);
+  }}).catch(()=>toast('Erreur réseau'));
+}}
+function exportCfg(){{
+  const b=new Blob([JSON.stringify(getCfg(),null,2)],{{type:'application/json'}});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='config_final.json';a.click();
+}}
+upPreview();
+</script>
+</body></html>"""
 
 
-# ---------------------------------------------------------------------------
-# MAIN
-# ---------------------------------------------------------------------------
+class CalibanHandler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+
+    def do_GET(self):
+        if self.path in ("/", "/preview"):
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(PREVIEW_PATH.read_bytes())
+        else:
+            self.send_response(404); self.end_headers()
+
+    def do_POST(self):
+        if self.path == "/api/save":
+            n = int(self.headers.get("Content-Length", 0))
+            data = json.loads(self.rfile.read(n))
+            CALIBAN_OUT.mkdir(parents=True, exist_ok=True)
+            CONFIG_FINAL.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok":true}')
+            threading.Thread(target=self.server.shutdown, daemon=True).start()
+        else:
+            self.send_response(404); self.end_headers()
+
 
 def main():
-    parser = argparse.ArgumentParser(description="CYPHER F02 CALIBAN")
-    parser.add_argument("--input", default=None, help="Chemin lion_output.json (défaut: F01_LION/OUT/lion_output.json)")
-    parser.add_argument("--serve", action="store_true", help="Servir le preview sur http://localhost:8090")
-    parser.add_argument("--port", type=int, default=8090)
-    args = parser.parse_args()
+    import argparse
+    p = argparse.ArgumentParser()
+    p.add_argument("--port", type=int, default=8090)
+    args = p.parse_args()
 
-    # Localiser lion_output.json
-    if args.input:
-        lion_path = Path(args.input)
-    else:
-        lion_path = BASE / "F01_LION" / "OUT" / "lion_output.json"
+    for path, name in [(TIMING_PATH, "timing.json"), (CONFIG_PATH, "config.json")]:
+        if not path.exists():
+            print(f"[CALIBAN] ERREUR : {name} introuvable → {path}")
+            sys.exit(1)
 
-    if not lion_path.exists():
-        sys.exit(f"[CALIBAN] lion_output.json introuvable : {lion_path}")
+    timing = json.loads(TIMING_PATH.read_text())
+    config = json.loads(CONFIG_PATH.read_text())
 
-    with open(lion_path) as f:
-        lion_data = json.load(f)
+    print("═" * 52)
+    print("  F02 CALIBAN — Preview Gate 2 (thème Imperivm)")
+    print("═" * 52)
 
-    events = lion_data.get("spatial_events", [])
-    script = lion_data.get("script", "")
+    CALIBAN_OUT.mkdir(parents=True, exist_ok=True)
+    PREVIEW_PATH.write_text(build_preview(timing, config), encoding="utf-8")
+    print(f"[CALIBAN] Preview → {PREVIEW_PATH}")
 
-    if not events:
-        sys.exit("[CALIBAN] Aucun spatial_event dans lion_output.json")
+    server = http.server.HTTPServer(("0.0.0.0", args.port), CalibanHandler)
+    print(f"[CALIBAN] Port {args.port} — serveur actif")
+    print(f"[CALIBAN] Fermeture automatique après Gate 2 validée")
+    print("─" * 52)
+    server.serve_forever()
 
-    ledger = load_ledger()
-    subject = ledger.get("narrative", {}).get("subject", "CYPHER")
-    run_id = ledger.get("run_id", "?")
-
-    print(f"[CALIBAN] {len(events)} événements | run_id: {run_id}")
-
-    # Générer acier.py
-    acier_code = build_acier(events, script)
-    out_dir = BASE / "F02_CALIBAN" / "OUT"
-    out_dir.mkdir(exist_ok=True)
-    acier_path = out_dir / "acier.py"
-    with open(acier_path, "w") as f:
-        f.write(acier_code)
-    print(f"[CALIBAN] acier.py → {acier_path}")
-
-    # Générer preview.html
-    preview_html = build_preview_html(events, script, subject, run_id)
-    preview_path = out_dir / "preview.html"
-    with open(preview_path, "w") as f:
-        f.write(preview_html)
-    print(f"[CALIBAN] preview.html → {preview_path}")
-
-    # Mettre à jour le ledger
-    ledger["assets"]["acier_path"] = str(acier_path)
-    ledger["assets"]["preview_html"] = str(preview_path)
-    ledger["status"] = "caliban_done"
-    save_ledger(ledger)
-
-    print(f"\n[CALIBAN] STATUS: caliban_done")
-    print(f"[CALIBAN] Preview : {preview_path}")
-
-    if args.serve:
-        # Serveur HTTP minimaliste pour le preview
-        import http.server
-        import socketserver
-
-        class Handler(http.server.SimpleHTTPRequestHandler):
-            def __init__(self, *a, **kw):
-                super().__init__(*a, directory=str(out_dir), **kw)
-            def log_message(self, *a):
-                pass
-
-        port = args.port
-        with socketserver.TCPServer(("", port), Handler) as httpd:
-            print(f"[CALIBAN] Preview disponible → http://localhost:{port}/preview.html")
-            print(f"[CALIBAN] Ctrl+C pour arrêter")
-            try:
-                httpd.serve_forever()
-            except KeyboardInterrupt:
-                print("\n[CALIBAN] Serveur arrêté")
+    if CONFIG_FINAL.exists():
+        print(f"[CALIBAN] config_final.json → {CONFIG_FINAL}")
+        print("[CALIBAN] Gate 2 ✓ — prêt pour Gate 3 DEATHWING")
 
 
 if __name__ == "__main__":
