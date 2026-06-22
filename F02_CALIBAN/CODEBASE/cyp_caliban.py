@@ -16,10 +16,11 @@ BASE        = Path(__file__).resolve().parents[3]
 LION_OUT    = BASE / "F01_LION" / "OUT"
 CALIBAN_OUT = BASE / "F02_CALIBAN" / "OUT"
 
-TIMING_PATH  = LION_OUT / "timing.json"
-CONFIG_PATH  = LION_OUT / "config.json"
-PREVIEW_PATH = CALIBAN_OUT / "preview.html"
-CONFIG_FINAL = CALIBAN_OUT / "config_final.json"
+TIMING_PATH   = LION_OUT / "timing.json"
+CONFIG_PATH   = LION_OUT / "config.json"
+PREVIEW_PATH  = CALIBAN_OUT / "preview.html"
+CONFIG_FINAL  = CALIBAN_OUT / "config_final.json"
+RENDER_SPEC   = CALIBAN_OUT / "render_spec.json"
 
 FONTS = [
     "Arrila Black", "Cinzel", "Cinzel Decorative",
@@ -274,6 +275,25 @@ upPreview();
 </body></html>"""
 
 
+def _merge_segments(timing_segs: list, gate2_cfg: dict) -> list:
+    """Fusionne les segments timing avec les overrides Gate 2 (sfx_triggers, visuels assignés)."""
+    sfx_overrides  = gate2_cfg.get("sfx_triggers", {})   # {str(idx): bool}
+    visuals_assign = gate2_cfg.get("visuals_assign", {})  # {str(idx): filename}
+    media_types    = gate2_cfg.get("media_types", {})     # {str(idx): "image"|"video"|"gif"}
+    merged = []
+    for i, seg in enumerate(timing_segs):
+        s = dict(seg)
+        k = str(i)
+        if k in sfx_overrides:
+            s["sfx_trigger"] = sfx_overrides[k]
+        if k in visuals_assign:
+            s["visual_file"] = visuals_assign[k]
+        if k in media_types:
+            s["media_type"] = media_types[k]
+        merged.append(s)
+    return merged
+
+
 class CalibanHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
 
@@ -289,9 +309,35 @@ class CalibanHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/api/save":
             n = int(self.headers.get("Content-Length", 0))
-            data = json.loads(self.rfile.read(n))
+            gate2_cfg = json.loads(self.rfile.read(n))
             CALIBAN_OUT.mkdir(parents=True, exist_ok=True)
-            CONFIG_FINAL.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+
+            # Sauvegarder config_final.json (Gate 2 brut)
+            CONFIG_FINAL.write_text(json.dumps(gate2_cfg, indent=2, ensure_ascii=False))
+
+            # Merger timing.json + config.json + Gate 2 → render_spec.json
+            timing = json.loads(TIMING_PATH.read_text()) if TIMING_PATH.exists() else {}
+            base_cfg = json.loads(CONFIG_PATH.read_text()) if CONFIG_PATH.exists() else {}
+
+            render_spec = {
+                "meta":     timing.get("meta", {}),
+                "words":    timing.get("words", []),
+                "segments": _merge_segments(timing.get("segments", []), gate2_cfg),
+                "display": {
+                    "font":           gate2_cfg.get("font", base_cfg.get("subtitle_font", "Arrila Black")),
+                    "font_color":     gate2_cfg.get("font_color", base_cfg.get("subtitle_color", "#FFFFFF")),
+                    "font_size":      gate2_cfg.get("font_size", base_cfg.get("subtitle_size", 48)),
+                    "position":       gate2_cfg.get("subtitle_position", base_cfg.get("subtitle_position", "bottom")),
+                    "animation":      gate2_cfg.get("subtitle_animation", base_cfg.get("subtitle_animation", "left")),
+                    "animation_speed":gate2_cfg.get("animation_speed", base_cfg.get("animation_speed", 0.4)),
+                    "visual_scale":   gate2_cfg.get("visual_scale", base_cfg.get("visual_scale", 1.0)),
+                },
+                "format":    base_cfg.get("format", "short"),
+                "map_style": base_cfg.get("map_style", "dark"),
+                "visuals":   base_cfg.get("visuals", []),
+            }
+            RENDER_SPEC.write_text(json.dumps(render_spec, indent=2, ensure_ascii=False))
+
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.end_headers()
@@ -329,8 +375,8 @@ def main():
     print("─" * 52)
     server.serve_forever()
 
-    if CONFIG_FINAL.exists():
-        print(f"[CALIBAN] config_final.json → {CONFIG_FINAL}")
+    if RENDER_SPEC.exists():
+        print(f"[CALIBAN] render_spec.json → {RENDER_SPEC}")
         print("[CALIBAN] Gate 2 ✓ — prêt pour Gate 3 DEATHWING")
 
 
