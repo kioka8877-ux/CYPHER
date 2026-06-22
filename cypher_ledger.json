@@ -1,19 +1,202 @@
 {
-  "run_id": null,
-  "created_at": null,
-  "status": "idle",
+  "run_id": "CYP_20260622_0342",
+  "created_at": "2026-06-22T03:42:13.701133",
+  "status": "lion_done",
   "narrative": {
-    "subject": null,
-    "duration_seconds": null,
+    "subject": "La chute de Constantinople 1453",
+    "duration_seconds": 90,
     "language": "fr",
     "tone": "dramatique",
-    "script": null
+    "script": "En 1453, l'Empire ottoman lance l'assaut final contre Constantinople. Après mille ans de domination byzantine, la cité légendaire tombe. Mehmed II franchit les murs. C'est la fin d'une ère. Istanbul devient capitale ottomane. L'équilibre géopolitique de la Méditerranée bascule à jamais."
   },
   "timeline_clock": null,
   "spatial_events": {
-    "geo_focus": [],
-    "highlights": [],
-    "overlays": []
+    "geo_focus": [
+      {
+        "lat": 41.0,
+        "lon": 28.98,
+        "zoom": 6
+      },
+      {
+        "lat": 41.01,
+        "lon": 28.98,
+        "zoom": 9
+      },
+      {
+        "lat": 41.01,
+        "lon": 28.98,
+        "zoom": 10
+      },
+      {
+        "lat": 41.0,
+        "lon": 28.98,
+        "zoom": 8
+      },
+      {
+        "lat": 41.01,
+        "lon": 28.98,
+        "zoom": 11
+      },
+      {
+        "lat": 41.01,
+        "lon": 28.98,
+        "zoom": 10
+      },
+      {
+        "lat": 40.5,
+        "lon": 25.0,
+        "zoom": 5
+      },
+      {
+        "lat": 41.01,
+        "lon": 28.98,
+        "zoom": 9
+      }
+    ],
+    "highlights": [
+      [
+        {
+          "iso": "TR",
+          "color": "#8B0000",
+          "opacity": 0.8
+        }
+      ],
+      [
+        {
+          "iso": "TR",
+          "color": "#DC143C",
+          "opacity": 0.9
+        }
+      ],
+      [
+        {
+          "iso": "TR",
+          "color": "#FF4500",
+          "opacity": 0.85
+        }
+      ],
+      [
+        {
+          "iso": "TR",
+          "color": "#8B0000",
+          "opacity": 0.8
+        },
+        {
+          "iso": "GR",
+          "color": "#4169E1",
+          "opacity": 0.6
+        }
+      ],
+      [
+        {
+          "iso": "TR",
+          "color": "#000000",
+          "opacity": 0.7
+        }
+      ],
+      [
+        {
+          "iso": "TR",
+          "color": "#FFD700",
+          "opacity": 0.8
+        }
+      ],
+      [
+        {
+          "iso": "TR",
+          "color": "#8B0000",
+          "opacity": 0.8
+        },
+        {
+          "iso": "GR",
+          "color": "#4169E1",
+          "opacity": 0.5
+        },
+        {
+          "iso": "IT",
+          "color": "#CE2B37",
+          "opacity": 0.5
+        }
+      ],
+      [
+        {
+          "iso": "TR",
+          "color": "#8B0000",
+          "opacity": 0.9
+        }
+      ]
+    ],
+    "overlays": [
+      [
+        {
+          "type": "text",
+          "content": "EMPIRE OTTOMAN 1453",
+          "position": "top"
+        }
+      ],
+      [
+        {
+          "type": "marker",
+          "lat": 41.01,
+          "lon": 28.98,
+          "label": "Constantinople",
+          "icon": "fortress"
+        }
+      ],
+      [
+        {
+          "type": "pulse",
+          "lat": 41.01,
+          "lon": 28.98,
+          "radius": 2,
+          "color": "#FF6347"
+        }
+      ],
+      [
+        {
+          "type": "arrow",
+          "from": {
+            "lat": 41.5,
+            "lon": 28.5
+          },
+          "to": {
+            "lat": 41.01,
+            "lon": 28.98
+          },
+          "color": "#DC143C"
+        }
+      ],
+      [
+        {
+          "type": "text",
+          "content": "SIÈGE - 53 JOURS",
+          "position": "center"
+        }
+      ],
+      [
+        {
+          "type": "marker",
+          "lat": 41.01,
+          "lon": 28.98,
+          "label": "Chute 29 mai 1453",
+          "icon": "cross"
+        }
+      ],
+      [
+        {
+          "type": "text",
+          "content": "NOUVEAU CENTRE OTTOMAN",
+          "position": "top"
+        }
+      ],
+      [
+        {
+          "type": "text",
+          "content": "ISTANBUL - CAPITALE",
+          "position": "bottom"
+        }
+      ]
+    ]
   },
   "assets": {
     "audio_raw": null,
@@ -29,5 +212,219 @@
   "output": {
     "final_video": null,
     "clean_video": null
-  }
+  },
+  "timeline_events": [
+    {
+      "t_start": 0.0,
+      "t_end": 12.0,
+      "geo_focus": {
+        "lat": 41.0,
+        "lon": 28.98,
+        "zoom": 6
+      },
+      "highlights": [
+        {
+          "iso": "TR",
+          "color": "#8B0000",
+          "opacity": 0.8
+        }
+      ],
+      "overlays": [
+        {
+          "type": "text",
+          "content": "EMPIRE OTTOMAN 1453",
+          "position": "top"
+        }
+      ]
+    },
+    {
+      "t_start": 12.0,
+      "t_end": 24.0,
+      "geo_focus": {
+        "lat": 41.01,
+        "lon": 28.98,
+        "zoom": 9
+      },
+      "highlights": [
+        {
+          "iso": "TR",
+          "color": "#DC143C",
+          "opacity": 0.9
+        }
+      ],
+      "overlays": [
+        {
+          "type": "marker",
+          "lat": 41.01,
+          "lon": 28.98,
+          "label": "Constantinople",
+          "icon": "fortress"
+        }
+      ]
+    },
+    {
+      "t_start": 24.0,
+      "t_end": 36.0,
+      "geo_focus": {
+        "lat": 41.01,
+        "lon": 28.98,
+        "zoom": 10
+      },
+      "highlights": [
+        {
+          "iso": "TR",
+          "color": "#FF4500",
+          "opacity": 0.85
+        }
+      ],
+      "overlays": [
+        {
+          "type": "pulse",
+          "lat": 41.01,
+          "lon": 28.98,
+          "radius": 2,
+          "color": "#FF6347"
+        }
+      ]
+    },
+    {
+      "t_start": 36.0,
+      "t_end": 48.0,
+      "geo_focus": {
+        "lat": 41.0,
+        "lon": 28.98,
+        "zoom": 8
+      },
+      "highlights": [
+        {
+          "iso": "TR",
+          "color": "#8B0000",
+          "opacity": 0.8
+        },
+        {
+          "iso": "GR",
+          "color": "#4169E1",
+          "opacity": 0.6
+        }
+      ],
+      "overlays": [
+        {
+          "type": "arrow",
+          "from": {
+            "lat": 41.5,
+            "lon": 28.5
+          },
+          "to": {
+            "lat": 41.01,
+            "lon": 28.98
+          },
+          "color": "#DC143C"
+        }
+      ]
+    },
+    {
+      "t_start": 48.0,
+      "t_end": 60.0,
+      "geo_focus": {
+        "lat": 41.01,
+        "lon": 28.98,
+        "zoom": 11
+      },
+      "highlights": [
+        {
+          "iso": "TR",
+          "color": "#000000",
+          "opacity": 0.7
+        }
+      ],
+      "overlays": [
+        {
+          "type": "text",
+          "content": "SIÈGE - 53 JOURS",
+          "position": "center"
+        }
+      ]
+    },
+    {
+      "t_start": 60.0,
+      "t_end": 72.0,
+      "geo_focus": {
+        "lat": 41.01,
+        "lon": 28.98,
+        "zoom": 10
+      },
+      "highlights": [
+        {
+          "iso": "TR",
+          "color": "#FFD700",
+          "opacity": 0.8
+        }
+      ],
+      "overlays": [
+        {
+          "type": "marker",
+          "lat": 41.01,
+          "lon": 28.98,
+          "label": "Chute 29 mai 1453",
+          "icon": "cross"
+        }
+      ]
+    },
+    {
+      "t_start": 72.0,
+      "t_end": 84.0,
+      "geo_focus": {
+        "lat": 40.5,
+        "lon": 25.0,
+        "zoom": 5
+      },
+      "highlights": [
+        {
+          "iso": "TR",
+          "color": "#8B0000",
+          "opacity": 0.8
+        },
+        {
+          "iso": "GR",
+          "color": "#4169E1",
+          "opacity": 0.5
+        },
+        {
+          "iso": "IT",
+          "color": "#CE2B37",
+          "opacity": 0.5
+        }
+      ],
+      "overlays": [
+        {
+          "type": "text",
+          "content": "NOUVEAU CENTRE OTTOMAN",
+          "position": "top"
+        }
+      ]
+    },
+    {
+      "t_start": 84.0,
+      "t_end": 90.0,
+      "geo_focus": {
+        "lat": 41.01,
+        "lon": 28.98,
+        "zoom": 9
+      },
+      "highlights": [
+        {
+          "iso": "TR",
+          "color": "#8B0000",
+          "opacity": 0.9
+        }
+      ],
+      "overlays": [
+        {
+          "type": "text",
+          "content": "ISTANBUL - CAPITALE",
+          "position": "bottom"
+        }
+      ]
+    }
+  ]
 }
