@@ -85,7 +85,7 @@ def cmd_close(args):
     if result.returncode != 0:
         sys.exit("[CYPHER] LUTHER a échoué — vérifier les logs")
     ledger = load_ledger()
-    run_id = ledger.get("current_run_id", "")
+    run_id = ledger.get("run_id", "")
     ledger["status"] = "victoria_aeterna"
     save_ledger(ledger)
     tag = f"cyp-{run_id}" if run_id else "cyp-???"

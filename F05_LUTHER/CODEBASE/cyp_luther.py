@@ -62,7 +62,7 @@ def main():
         sys.exit(1)
 
     ledger = load_ledger()
-    run_id = ledger.get("current_run_id")
+    run_id = ledger.get("run_id")
     if not run_id:
         print("[LUTHER] Erreur : current_run_id absent du ledger")
         sys.exit(1)
@@ -104,7 +104,7 @@ def main():
     url = trigger_workflow(run_id, production_date)
 
     # Mettre à jour le ledger
-    ledger.setdefault("gh_runs", {})["f05"] = url
+    ledger.setdefault("gh_runs", {})["luther"] = url
     save_ledger(ledger)
 
     print()
