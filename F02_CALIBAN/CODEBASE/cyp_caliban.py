@@ -4,7 +4,7 @@ import json, os, sys, threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 BASE = Path(__file__).resolve().parent
 
 def find(names):
