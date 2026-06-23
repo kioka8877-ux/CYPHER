@@ -12,7 +12,7 @@ import http.server
 import threading
 from pathlib import Path
 
-BASE        = Path(__file__).resolve().parents[3]
+BASE        = Path(__file__).resolve().parents[2]
 LION_OUT    = BASE / "F01_LION" / "OUT"
 CALIBAN_OUT = BASE / "F02_CALIBAN" / "OUT"
 
@@ -44,6 +44,8 @@ def build_preview(timing: dict, config: dict) -> str:
     words     = timing.get("words", [])
     meta      = timing.get("meta", {})
     vis_list  = config.get("visuals", [])
+    if isinstance(vis_list, dict):   # mode=search → pas encore assignés
+        vis_list = []
     cfg       = config.get("display", {})
     fmt       = config.get("format", "short")
 
