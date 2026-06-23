@@ -1,472 +1,382 @@
-#!/usr/bin/env python3
 """
-F02 CALIBAN — Visual Canvas Preview (Imperivm theme)
-Parses timing.json, extracts countries/brands via LLM,
-serves interactive HTML preview with Leaflet map + logo overlay.
-POST /api/save → render_spec.json (merged, ready for DEATHWING).
+cyp_caliban.py — F02 CALIBAN — CYPHER
+======================================
+Preview visuel : Leaflet satellite + logos brands + sous-titres.
+Inspiré architecture DORN F02 CASTELLAN.
+Stack : http.server + Leaflet.js + base64 data injection.
+
+Usage : python cyp_caliban.py [--port 8080]
+Entrées  : F01_LION/OUT/timing.json + config.json
+Sorties  : F02_CALIBAN/OUT/render_spec.json
 """
+import argparse, base64, http.server, json, os, sys, threading
 
-import json, os, sys, http.server, threading, urllib.request
-from pathlib import Path
+def find_root():
+    d = os.path.dirname(os.path.abspath(__file__))
+    while d != os.path.dirname(d):
+        if os.path.exists(os.path.join(d, "cypher_ledger.json")):
+            return d
+        d = os.path.dirname(d)
+    return os.getcwd()
 
-BASE        = Path(__file__).resolve().parents[2]
-LION_OUT    = BASE / "F01_LION"  / "OUT"
-CALIBAN_IN  = BASE / "F02_CALIBAN" / "IN"
-CALIBAN_OUT = BASE / "F02_CALIBAN" / "OUT"
-CALIBAN_OUT.mkdir(parents=True, exist_ok=True)
+ROOT   = find_root()
+F01OUT = os.path.join(ROOT, "F01_LION", "OUT")
+F02IN  = os.path.join(ROOT, "F02_CALIBAN", "IN")
+F02OUT = os.path.join(ROOT, "F02_CALIBAN", "OUT")
 
-TIMING_PATH = CALIBAN_IN / "timing.json"
-CONFIG_PATH = CALIBAN_IN / "config.json"
-
-GW_URL = os.environ.get("AI_GATEWAY_BASE_URL", "")
-GW_KEY = os.environ.get("AI_GATEWAY_API_KEY", "")
-
-# ── country centroids (iso2 → {lat,lon,zoom}) ───────────────────────────────
-CENTROIDS = {
-  "US":{"lat":38.9,"lon":-77.0,"zoom":4},"DE":{"lat":51.2,"lon":10.5,"zoom":5},
-  "JP":{"lat":36.2,"lon":138.3,"zoom":5},"KR":{"lat":35.9,"lon":127.8,"zoom":6},
-  "FR":{"lat":46.2,"lon":2.2,"zoom":5},"IT":{"lat":42.8,"lon":12.6,"zoom":5},
-  "SE":{"lat":60.1,"lon":18.6,"zoom":5},"CN":{"lat":35.9,"lon":104.2,"zoom":4},
-  "CA":{"lat":56.1,"lon":-106.3,"zoom":4},"GB":{"lat":55.4,"lon":-3.4,"zoom":5},
-  "AE":{"lat":23.4,"lon":53.8,"zoom":6},"TW":{"lat":23.7,"lon":120.9,"zoom":7},
-  "CH":{"lat":46.8,"lon":8.2,"zoom":7},"NL":{"lat":52.1,"lon":5.3,"zoom":7},
-  "ES":{"lat":40.5,"lon":-3.7,"zoom":6},"IN":{"lat":20.6,"lon":78.9,"zoom":4},
-  "AU":{"lat":-25.3,"lon":133.8,"zoom":4},"SG":{"lat":1.3,"lon":103.8,"zoom":10},
-  "FI":{"lat":61.9,"lon":25.7,"zoom":5},"DK":{"lat":56.3,"lon":9.5,"zoom":6},
-  "BR":{"lat":-14.2,"lon":-51.9,"zoom":4},"TR":{"lat":38.9,"lon":35.2,"zoom":5},
-  "GR":{"lat":39.1,"lon":21.8,"zoom":6},"BY":{"lat":53.7,"lon":27.9,"zoom":6},
+COUNTRY_DB = {
+    "united states":{"iso":"US","lat":37.09,"lon":-95.71,"zoom":4,"flag":"🇺🇸","name":"United States"},
+    "usa":          {"iso":"US","lat":37.09,"lon":-95.71,"zoom":4,"flag":"🇺🇸","name":"United States"},
+    "germany":      {"iso":"DE","lat":51.16,"lon":10.45, "zoom":5,"flag":"🇩🇪","name":"Germany"},
+    "japan":        {"iso":"JP","lat":36.2, "lon":138.25,"zoom":5,"flag":"🇯🇵","name":"Japan"},
+    "south korea":  {"iso":"KR","lat":35.91,"lon":127.77,"zoom":6,"flag":"🇰🇷","name":"South Korea"},
+    "korea":        {"iso":"KR","lat":35.91,"lon":127.77,"zoom":6,"flag":"🇰🇷","name":"South Korea"},
+    "france":       {"iso":"FR","lat":46.23,"lon":2.21,  "zoom":5,"flag":"🇫🇷","name":"France"},
+    "italy":        {"iso":"IT","lat":41.87,"lon":12.57, "zoom":5,"flag":"🇮🇹","name":"Italy"},
+    "sweden":       {"iso":"SE","lat":60.13,"lon":18.64, "zoom":5,"flag":"🇸🇪","name":"Sweden"},
+    "china":        {"iso":"CN","lat":35.86,"lon":104.19,"zoom":4,"flag":"🇨🇳","name":"China"},
+    "canada":       {"iso":"CA","lat":56.13,"lon":-106.35,"zoom":4,"flag":"🇨🇦","name":"Canada"},
+    "uk":           {"iso":"GB","lat":55.38,"lon":-3.44, "zoom":5,"flag":"🇬🇧","name":"United Kingdom"},
+    "united kingdom":{"iso":"GB","lat":55.38,"lon":-3.44,"zoom":5,"flag":"🇬🇧","name":"United Kingdom"},
+    "uae":          {"iso":"AE","lat":23.42,"lon":53.85, "zoom":6,"flag":"🇦🇪","name":"UAE"},
+    "taiwan":       {"iso":"TW","lat":23.69,"lon":120.96,"zoom":7,"flag":"🇹🇼","name":"Taiwan"},
+    "switzerland":  {"iso":"CH","lat":46.82,"lon":8.23,  "zoom":6,"flag":"🇨🇭","name":"Switzerland"},
+    "netherlands":  {"iso":"NL","lat":52.13,"lon":5.29,  "zoom":7,"flag":"🇳🇱","name":"Netherlands"},
+    "spain":        {"iso":"ES","lat":40.46,"lon":-3.75, "zoom":6,"flag":"🇪🇸","name":"Spain"},
+    "india":        {"iso":"IN","lat":20.59,"lon":78.96, "zoom":5,"flag":"🇮🇳","name":"India"},
+    "australia":    {"iso":"AU","lat":-25.27,"lon":133.77,"zoom":4,"flag":"🇦🇺","name":"Australia"},
+    "singapore":    {"iso":"SG","lat":1.35, "lon":103.82,"zoom":11,"flag":"🇸🇬","name":"Singapore"},
+    "finland":      {"iso":"FI","lat":61.92,"lon":25.75, "zoom":6,"flag":"🇫🇮","name":"Finland"},
+    "denmark":      {"iso":"DK","lat":56.26,"lon":9.50,  "zoom":6,"flag":"🇩🇰","name":"Denmark"},
+    "brazil":       {"iso":"BR","lat":-14.24,"lon":-51.93,"zoom":4,"flag":"🇧🇷","name":"Brazil"},
+    "turkey":       {"iso":"TR","lat":38.96,"lon":35.24, "zoom":5,"flag":"🇹🇷","name":"Turkey"},
+    "ottoman":      {"iso":"TR","lat":41.01,"lon":28.98, "zoom":7,"flag":"🌙","name":"Ottoman Empire"},
+    "byzantine":    {"iso":"GR","lat":41.01,"lon":28.98, "zoom":8,"flag":"🏛️","name":"Byzantine Empire"},
+    "constantinople":{"iso":"TR","lat":41.01,"lon":28.98,"zoom":9,"flag":"🏙️","name":"Constantinople"},
+    "istanbul":     {"iso":"TR","lat":41.01,"lon":28.98, "zoom":9,"flag":"🕌","name":"Istanbul"},
+    "russia":       {"iso":"RU","lat":61.52,"lon":105.32,"zoom":3,"flag":"🇷🇺","name":"Russia"},
+    "mexico":       {"iso":"MX","lat":23.63,"lon":-102.55,"zoom":5,"flag":"🇲🇽","name":"Mexico"},
+    "indonesia":    {"iso":"ID","lat":-0.79,"lon":113.92, "zoom":4,"flag":"🇮🇩","name":"Indonesia"},
+    "saudi arabia": {"iso":"SA","lat":23.89,"lon":45.08,  "zoom":5,"flag":"🇸🇦","name":"Saudi Arabia"},
+    "south africa": {"iso":"ZA","lat":-30.56,"lon":22.94, "zoom":5,"flag":"🇿🇦","name":"South Africa"},
+    "argentina":    {"iso":"AR","lat":-38.42,"lon":-63.62,"zoom":4,"flag":"🇦🇷","name":"Argentina"},
+    "poland":       {"iso":"PL","lat":51.92,"lon":19.15,  "zoom":6,"flag":"🇵🇱","name":"Poland"},
 }
 
 BRAND_DOMAINS = {
-  "apple":"apple.com","nike":"nike.com","coca-cola":"coca-cola.com",
-  "mcdonald's":"mcdonalds.com","tesla":"tesla.com","bmw":"bmw.com",
-  "mercedes-benz":"mercedes-benz.com","adidas":"adidas.com","toyota":"toyota.com",
-  "sony":"sony.com","nintendo":"nintendo.com","samsung":"samsung.com",
-  "hyundai":"hyundai.com","lg":"lg.com","airbus":"airbus.com",
-  "louis vuitton":"louisvuitton.com","ferrari":"ferrari.com","gucci":"gucci.com",
-  "lamborghini":"lamborghini.com","ikea":"ikea.com","volvo":"volvocars.com",
-  "spotify":"spotify.com","tiktok":"tiktok.com","huawei":"huawei.com",
-  "dji":"dji.com","shopify":"shopify.com","bombardier":"bombardier.com",
-  "rolls-royce":"rolls-royce.com","burberry":"burberry.com",
-  "british airways":"britishairways.com","emirates":"emirates.com",
-  "tsmc":"tsmc.com","acer":"acer.com","nestle":"nestle.com",
-  "rolex":"rolex.com","ubs":"ubs.com","philips":"philips.com",
-  "heineken":"heineken.com","asml":"asml.com","zara":"zara.com",
-  "santander":"santander.com","tata":"tata.com","reliance":"ril.com",
-  "qantas":"qantas.com","atlassian":"atlassian.com","canva":"canva.com",
-  "grab":"grab.com","singapore airlines":"singaporeair.com","nokia":"nokia.com",
-  "kone":"kone.com","lego":"lego.com","maersk":"maersk.com","embraer":"embraer.com",
+    "apple":"apple.com","nike":"nike.com","coca-cola":"coca-cola.com",
+    "mcdonald":"mcdonalds.com","tesla":"tesla.com","bmw":"bmw.com",
+    "mercedes":"mercedes-benz.com","adidas":"adidas.com","toyota":"toyota.com",
+    "sony":"sony.com","nintendo":"nintendo.com","samsung":"samsung.com",
+    "hyundai":"hyundai.com","lg":"lg.com","airbus":"airbus.com",
+    "louis vuitton":"louisvuitton.com","ferrari":"ferrari.com","gucci":"gucci.com",
+    "lamborghini":"lamborghini.com","ikea":"ikea.com","volvo":"volvo.com",
+    "spotify":"spotify.com","tiktok":"tiktok.com","huawei":"huawei.com",
+    "dji":"dji.com","shopify":"shopify.com","rolls-royce":"rolls-royce.com",
+    "burberry":"burberry.com","emirates":"emirates.com","tsmc":"tsmc.com",
+    "acer":"acer.com","nestle":"nestle.com","rolex":"rolex.com","ubs":"ubs.com",
+    "philips":"philips.com","heineken":"heineken.com","asml":"asml.com",
+    "zara":"zara.com","tata":"tata.com","qantas":"qantas.com",
+    "atlassian":"atlassian.com","canva":"canva.com","grab":"grab.com",
+    "nokia":"nokia.com","lego":"lego.com","maersk":"maersk.com",
+    "embraer":"embraer.com","amazon":"amazon.com","google":"google.com",
+    "microsoft":"microsoft.com","netflix":"netflix.com",
 }
 
+def extract_country(text):
+    t = text.lower()
+    for key in sorted(COUNTRY_DB.keys(), key=len, reverse=True):
+        if key in t:
+            return COUNTRY_DB[key]
+    return {"iso":"WW","lat":20.0,"lon":0.0,"zoom":2,"flag":"🌍","name":"World"}
 
-def logo_url(brand: str) -> str:
-    domain = BRAND_DOMAINS.get(brand.lower(), "")
-    if domain:
-        return f"https://logo.clearbit.com/{domain}"
-    return ""
+def extract_brands(text):
+    t = text.lower()
+    found = []
+    for brand, domain in sorted(BRAND_DOMAINS.items(), key=lambda x:len(x[0]), reverse=True):
+        if brand in t and domain not in [b["domain"] for b in found]:
+            found.append({"name":brand.title(),"domain":domain,
+                          "logo":f"https://logo.clearbit.com/{domain}"})
+        if len(found) >= 4:
+            break
+    return found
 
+def build_segments(timing, config):
+    return [{
+        "id": s["id"], "text": s["text"],
+        "start": s["start"], "end": s["end"],
+        "start_frame": s["start_frame"], "end_frame": s["end_frame"],
+        "country":  extract_country(s["text"]),
+        "brands":   extract_brands(s["text"]),
+        "sfx_trigger": False, "media_type": "image",
+    } for s in timing.get("segments", [])]
 
-def llm_extract(segments: list) -> list:
-    """Ask LLM to extract country ISO codes + brand names per segment."""
-    if not GW_URL or not GW_KEY:
-        return [{"countries": [], "brands": []} for _ in segments]
-
-    texts = [{"idx": i, "text": s.get("text", "")} for i, s in enumerate(segments)]
-    prompt = (
-        "For each segment, extract: 1) ISO2 country codes mentioned, "
-        "2) brand/company names. Return JSON array matching input order: "
-        '[{"idx":0,"countries":["US"],"brands":["Apple","Nike"]},...]\n\n'
-        + json.dumps(texts)
+def build_html(segments, config):
+    font_opts = "".join(
+        f'<option value="{f}">{f}</option>'
+        for f in ["Cinzel","Arial","Arial Black","Georgia","Impact","Verdana","Courier New"]
     )
-    payload = json.dumps({
-        "model": "anthropic/claude-haiku-4.5",
-        "messages": [
-            {"role": "system", "content": "You extract structured data from text. Return only valid JSON."},
-            {"role": "user", "content": prompt}
-        ],
-        "max_tokens": 2000, "temperature": 0
-    }).encode()
-
-    try:
-        req = urllib.request.Request(
-            f"{GW_URL}/api/v1/chat/completions",
-            data=payload,
-            headers={"Authorization": f"Bearer {GW_KEY}",
-                     "Content-Type": "application/json",
-                     "Accept-Encoding": "identity"},
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=30) as r:
-            resp = json.loads(r.read())
-        raw = resp["choices"][0]["message"]["content"].strip()
-        raw = raw[raw.find("["):raw.rfind("]")+1]
-        return json.loads(raw)
-    except Exception as e:
-        print(f"[CALIBAN] LLM extract failed: {e}", file=sys.stderr)
-        return [{"idx": i, "countries": [], "brands": []} for i in range(len(segments))]
-
-
-def build_preview_data(timing: dict, config: dict) -> dict:
-    segs = timing.get("segments", [])
-    extracts = llm_extract(segs)
-    extract_map = {e.get("idx", i): e for i, e in enumerate(extracts)}
-
-    segments_out = []
-    for i, seg in enumerate(segs):
-        ex = extract_map.get(i, {"countries": [], "brands": []})
-        countries = ex.get("countries", [])
-        brands = ex.get("brands", [])
-
-        # map center: first recognized country
-        map_center = None
-        for iso in countries:
-            if iso in CENTROIDS:
-                map_center = {**CENTROIDS[iso], "iso": iso}
-                break
-        if not map_center:
-            map_center = {"lat": 20, "lon": 0, "zoom": 2, "iso": ""}
-
-        # logos
-        logos = []
-        for b in brands[:4]:
-            url = logo_url(b)
-            if url:
-                logos.append({"brand": b, "url": url})
-
-        segments_out.append({
-            "idx": i,
-            "start": seg.get("start", 0),
-            "end":   seg.get("end", 0),
-            "text":  seg.get("text", ""),
-            "countries": countries,
-            "brands": brands,
-            "logos": logos,
-            "map_center": map_center,
-            "sfx_trigger": False,
-            "visual_file": "",
-            "media_type": "logo",
-        })
-
-    return {
-        "segments": segments_out,
-        "meta": timing.get("meta", {}),
-        "display": {
-            "font":       config.get("subtitle_font", "Cinzel"),
-            "font_color": config.get("subtitle_color", "#FFFFFF"),
-            "font_size":  config.get("subtitle_size", 52),
-            "position":   config.get("subtitle_position", "bottom"),
-            "animation":  config.get("subtitle_animation", "ltr"),
-            "visual_scale": config.get("visual_scale", 0.85),
-        },
-        "format":    config.get("format", "short"),
-        "map_style": config.get("map_style", "satellite"),
-    }
-
-
-HTML_TEMPLATE = r"""<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CYPHER — Gate 2 CALIBAN</title>
+    payload_b64 = base64.b64encode(
+        json.dumps({"segments":segments,"config":config}, ensure_ascii=False).encode()
+    ).decode("ascii")
+    return f'''<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>CYPHER F02 CALIBAN</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{background:#050B08;color:#c8c8c0;font-family:'Segoe UI',sans-serif;height:100vh;display:flex;flex-direction:column;overflow:hidden}
-  #top-bar{background:#0a1a0f;border-bottom:1px solid #1a3020;padding:8px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0}
-  #top-bar h1{color:#c8a96e;font-size:14px;letter-spacing:2px;font-weight:700;margin-right:auto}
-  .ctrl-group{display:flex;align-items:center;gap:6px;font-size:11px;color:#8a8a7a}
-  .ctrl-group select,.ctrl-group input[type=text],.ctrl-group input[type=number]{
-    background:#0d1f12;border:1px solid #1a3020;color:#c8c8c0;padding:3px 6px;font-size:11px;border-radius:3px}
-  #main{display:flex;flex:1;overflow:hidden}
-  #seg-list{width:220px;background:#070f09;border-right:1px solid #1a3020;overflow-y:auto;flex-shrink:0}
-  .seg-item{padding:8px 10px;border-bottom:1px solid #0d1a0f;cursor:pointer;transition:background .15s}
-  .seg-item:hover{background:#0d1f12}
-  .seg-item.active{background:#0f2a14;border-left:3px solid #c8a96e}
-  .seg-time{font-size:9px;color:#5a7a60;font-family:monospace}
-  .seg-text{font-size:10px;color:#9a9a8a;margin-top:2px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .seg-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:3px}
-  .tag{background:#0d2010;border:1px solid #1a4020;color:#6ab870;font-size:8px;padding:1px 5px;border-radius:2px}
-  #preview-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
-  #canvas-wrap{flex:1;display:flex;gap:0;overflow:hidden}
-  #map-frame{flex:1;position:relative;background:#050B08}
-  #map{width:100%;height:100%}
-  #video-frame{width:320px;flex-shrink:0;background:#050B08;border-left:1px solid #1a3020;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px}
-  .vf-label{font-size:9px;color:#3a5a40;letter-spacing:1px;text-transform:uppercase;position:absolute;top:8px;left:10px}
-  #logo-wrap{width:200px;height:120px;display:flex;align-items:center;justify-content:center;background:#0a1a0f;border:1px solid #1a3020;border-radius:4px;position:relative;overflow:hidden}
-  #logo-wrap img{max-width:180px;max-height:100px;object-fit:contain}
-  #logo-nav{display:flex;gap:6px;align-items:center}
-  .logo-dot{width:7px;height:7px;border-radius:50%;background:#1a3020;cursor:pointer;transition:background .15s}
-  .logo-dot.active{background:#c8a96e}
-  #subtitle-preview{width:200px;text-align:center;border-top:1px solid #1a3020;padding-top:8px}
-  #sfx-btn{padding:3px 10px;font-size:10px;border:1px solid #3a3020;background:#1a1008;color:#9a8060;border-radius:3px;cursor:pointer}
-  #sfx-btn.on{border-color:#c8a96e;background:#2a1a05;color:#c8a96e}
-  #countries-display{font-size:9px;color:#5a7a60;text-align:center}
-  #bottom-bar{background:#0a1a0f;border-top:1px solid #1a3020;padding:8px 16px;display:flex;align-items:center;gap:12px;flex-shrink:0}
-  #seg-slider{flex:1;accent-color:#c8a96e}
-  #seg-info{font-size:11px;color:#6a8a70;font-family:monospace;min-width:80px}
-  #validate-btn{background:#8B0000;color:#fff;border:none;padding:8px 20px;font-size:12px;letter-spacing:1px;cursor:pointer;border-radius:3px;font-weight:700}
-  #validate-btn:hover{background:#a00}
-  #status{font-size:10px;color:#4a7a50}
-</style>
-</head>
-<body>
-<div id="top-bar">
-  <h1>⚔ CYPHER — CALIBAN GATE II</h1>
-  <div class="ctrl-group">
-    <span>Font</span>
-    <select id="c-font">
-      <option>Cinzel</option><option>Arial Black</option>
-      <option>Impact</option><option>Georgia</option>
-    </select>
-  </div>
-  <div class="ctrl-group">
-    <span>Color</span>
-    <input type="text" id="c-color" value="#FFFFFF" style="width:70px">
-  </div>
-  <div class="ctrl-group">
-    <span>Size</span>
-    <input type="number" id="c-size" value="52" style="width:50px" min="24" max="96">
-  </div>
-  <div class="ctrl-group">
-    <span>Position</span>
-    <select id="c-pos"><option value="bottom">Bas</option><option value="center">Centre</option></select>
-  </div>
-  <div class="ctrl-group">
-    <span>Anim</span>
-    <select id="c-anim"><option value="ltr">Gauche→Droite</option><option value="none">Aucune</option><option value="fade">Fade</option></select>
-  </div>
-  <div class="ctrl-group">
-    <span>Scale</span>
-    <input type="number" id="c-scale" value="0.85" style="width:50px" min="0.3" max="1.5" step="0.05">
-  </div>
-</div>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#050B08;color:#c8c8c8;font-family:monospace;font-size:12px;height:100vh;display:flex;flex-direction:column;overflow:hidden}}
+#hdr{{background:#0a120e;border-bottom:1px solid #1a3020;padding:7px 16px;display:flex;justify-content:space-between;align-items:center}}
+#hdr h1{{font-size:13px;letter-spacing:3px;color:#00FFD1}}
+#hdr span{{font-size:10px;color:#446644}}
+#main{{display:flex;flex:1;overflow:hidden}}
+#left{{width:255px;min-width:255px;background:#060d09;border-right:1px solid #1a3020;display:flex;flex-direction:column;overflow:hidden}}
+#segs{{flex:1;overflow-y:auto;padding:6px}}
+.si{{padding:5px 8px;margin:2px 0;cursor:pointer;border-left:2px solid #1a3020;border-radius:2px}}
+.si:hover,.si.on{{background:#0d1e12;border-left-color:#00FFD1}}
+.si-hd{{display:flex;justify-content:space-between;align-items:center}}
+.si-co{{font-size:11px;color:#88cc88}}
+.si-t{{font-size:10px;color:#446644}}
+.si-tx{{font-size:10px;color:#556655;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}}
+.sfxb{{font-size:9px;padding:1px 5px;background:#1a0a0a;border:1px solid #330000;color:#884444;cursor:pointer;border-radius:2px}}
+.sfxb.on{{background:#330000;border-color:#B30006;color:#ff7070}}
+#ctrl{{padding:10px;border-top:1px solid #1a3020}}
+.cr{{display:flex;align-items:center;margin:3px 0;gap:5px}}
+.cl{{width:80px;color:#556655;font-size:11px;flex-shrink:0}}
+.cr select,.cr input[type=text]{{flex:1;background:#0a1a0e;border:1px solid #1a3020;color:#c8c8c8;padding:3px 5px;font-family:monospace;font-size:11px}}
+.cr input[type=range]{{flex:1;accent-color:#00FFD1}}
+.cr input[type=color]{{width:28px;height:22px;border:1px solid #1a3020;cursor:pointer}}
+.vv{{width:34px;font-size:10px;color:#88cc88}}
+#vbtn{{width:100%;margin-top:8px;padding:8px;background:#002b1a;border:1px solid #00FFD1;color:#00FFD1;font-family:monospace;font-size:11px;letter-spacing:2px;cursor:pointer}}
+#vbtn:hover{{background:#00FFD1;color:#050B08}}
+#smsg{{margin-top:6px;padding:5px 8px;border-radius:3px;display:none;font-size:10px}}
+#smsg.ok{{background:#002b1a;border:1px solid #00FFD1;color:#00FFD1;display:block}}
+#smsg.er{{background:#2b0000;border:1px solid #B30006;color:#ff7070;display:block}}
+#right{{flex:1;display:flex;align-items:center;justify-content:center;background:#030805;position:relative}}
+#fw{{position:relative;border:1px solid #1a3020;box-shadow:0 0 30px rgba(0,255,200,.06)}}
+#map{{width:100%;height:100%}}
+#logos{{position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);display:flex;gap:10px;align-items:center;justify-content:center;pointer-events:none;z-index:400}}
+.lg{{height:52px;width:auto;object-fit:contain;background:rgba(0,0,0,.6);border-radius:5px;padding:4px 8px;border:1px solid rgba(255,255,255,.12)}}
+.lg-txt{{background:rgba(0,0,0,.6);border:1px solid #446644;padding:4px 8px;border-radius:4px;font-size:11px;color:#88cc88}}
+#sub{{position:absolute;left:0;right:0;padding:10px 14px;background:linear-gradient(transparent,rgba(0,0,0,.8));z-index:500;text-align:center;pointer-events:none}}
+#stxt{{display:inline-block;text-shadow:2px 2px 4px #000,0 0 6px #000}}
+#cbadge{{position:absolute;top:10px;left:10px;background:rgba(5,11,8,.88);border:1px solid #1a3020;border-radius:3px;padding:4px 9px;z-index:500;font-size:12px}}
+#fbadge{{position:absolute;top:10px;right:10px;background:rgba(0,43,26,.88);border:1px solid #00FFD1;border-radius:3px;padding:3px 7px;z-index:500;font-size:9px;color:#00FFD1;letter-spacing:1px}}
+</style></head><body>
+<meta id="pl" data-b="{payload_b64}">
+<div id="hdr"><h1>⬡ CYPHER F02 — CALIBAN</h1><span id="fi">—</span></div>
 <div id="main">
-  <div id="seg-list" id="seg-list"></div>
-  <div id="preview-area">
-    <div id="canvas-wrap">
-      <div id="map-frame"><div id="map"></div></div>
-      <div id="video-frame">
-        <span class="vf-label">Preview Frame</span>
-        <div id="logo-wrap"><img id="logo-img" src="" alt="logo"></div>
-        <div id="logo-nav"></div>
-        <div id="subtitle-preview">
-          <span id="subtitle-text" style="font-size:18px;color:#fff;font-family:Cinzel"></span>
-        </div>
-        <div id="countries-display"></div>
-        <button id="sfx-btn" onclick="toggleSfx()">SFX ○</button>
-      </div>
+  <div id="left">
+    <div id="segs"></div>
+    <div id="ctrl">
+      <div style="color:#00FFD1;font-size:10px;letter-spacing:2px;margin-bottom:5px">PARAMÈTRES</div>
+      <div class="cr"><span class="cl">Format</span>
+        <select id="cf" onchange="applyCtrl()"><option value="short">SHORT 9:16</option><option value="long">LONG 16:9</option></select></div>
+      <div class="cr"><span class="cl">Police</span>
+        <select id="cfont" onchange="applyCtrl()">{font_opts}</select></div>
+      <div class="cr"><span class="cl">Taille</span>
+        <input type="range" id="csize" min="18" max="72" value="52" oninput="applyCtrl()">
+        <span class="vv" id="csizev">52</span></div>
+      <div class="cr"><span class="cl">Couleur</span>
+        <input type="color" id="ccol" value="#FFFFFF" oninput="syncCol(this.value)">
+        <input type="text" id="ccolh" value="#FFFFFF" maxlength="7" style="width:64px" oninput="syncHex(this.value)"></div>
+      <div class="cr"><span class="cl">Position</span>
+        <select id="cpos" onchange="applyCtrl()">
+          <option value="bottom">Bas</option><option value="center">Centre</option><option value="top">Haut</option></select></div>
+      <div class="cr"><span class="cl">Animation</span>
+        <select id="canim" onchange="applyCtrl()">
+          <option value="ltr">Gauche→Droite</option><option value="fade">Fondu</option><option value="none">Aucune</option></select></div>
+      <div class="cr"><span class="cl">Logos scale</span>
+        <input type="range" id="cscale" min="0.3" max="2.0" step="0.05" value="0.85" oninput="applyCtrl()">
+        <span class="vv" id="cscalev">0.85</span></div>
+      <button id="vbtn" onclick="doValidate()">▶ VALIDER GATE 2</button>
+      <div id="smsg"></div>
+    </div>
+  </div>
+  <div id="right">
+    <div id="fw">
+      <div id="map"></div>
+      <div id="logos"></div>
+      <div id="sub"><span id="stxt"></span></div>
+      <div id="cbadge">—</div>
+      <div id="fbadge">SHORT 9:16</div>
     </div>
   </div>
 </div>
-<div id="bottom-bar">
-  <input type="range" id="seg-slider" min="0" value="0">
-  <span id="seg-info">0 / 0</span>
-  <span id="status"></span>
-  <button id="validate-btn" onclick="validate()">VALIDER GATE 2 ▶</button>
-</div>
 <script>
-const DATA = __DATA__;
-const segs = DATA.segments;
-let cur = 0;
-let map, countryLayer;
+const DATA = JSON.parse(atob(document.getElementById('pl').dataset.b));
+const SEGS = DATA.segments, CFG = DATA.config;
+let map, cur=0, sfx={{}};
 
-// Init Leaflet
-map = L.map('map', {zoomControl:false, attributionControl:false});
-const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
-L.tileLayer(ESRI, {maxZoom:18}).addTo(map);
-L.control.zoom({position:'bottomleft'}).addTo(map);
+function frameSize(f){{ return f==='long'?[640,360]:[324,576]; }}
 
-function buildSegList() {
-  const el = document.getElementById('seg-list');
-  segs.forEach((s,i) => {
-    const d = document.createElement('div');
-    d.className = 'seg-item' + (i===0?' active':'');
-    d.id = 'si'+i;
-    const t = s.start.toFixed(1)+'s → '+s.end.toFixed(1)+'s';
-    let tags = s.countries.map(c=>`<span class="tag">${c}</span>`).join('') +
-               s.brands.slice(0,3).map(b=>`<span class="tag" style="color:#c8a96e">${b}</span>`).join('');
-    d.innerHTML = `<div class="seg-time">${i.toString().padStart(2,'0')} | ${t}</div>
-      <div class="seg-text">${s.text.substring(0,50)}...</div>
-      <div class="seg-tags">${tags}</div>`;
-    d.onclick = () => goTo(i);
+function applyFormat(f){{
+  const [w,h]=frameSize(f), fw=document.getElementById('fw');
+  fw.style.width=w+'px'; fw.style.height=h+'px';
+  document.getElementById('fbadge').textContent=f==='long'?'LONG 16:9':'SHORT 9:16';
+  if(map)map.invalidateSize();
+}}
+
+function initMap(){{
+  map=L.map('map',{{zoomControl:false,attributionControl:false}});
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',{{maxZoom:18}}).addTo(map);
+  loadSeg(0);
+}}
+
+function loadSeg(i){{
+  cur=i; const s=SEGS[i], c=s.country;
+  map.flyTo([c.lat,c.lon],c.zoom,{{animate:true,duration:0.7}});
+  document.getElementById('cbadge').textContent=c.flag+' '+c.name;
+  const ll=document.getElementById('logos'); ll.innerHTML='';
+  const sc=parseFloat(document.getElementById('cscale').value);
+  s.brands.slice(0,3).forEach(b=>{{
+    const img=document.createElement('img');
+    img.className='lg'; img.style.height=Math.round(52*sc)+'px';
+    img.src=b.logo;
+    img.onerror=()=>{{
+      img.remove();
+      const t=document.createElement('div');
+      t.className='lg-txt'; t.textContent=b.name; ll.appendChild(t);
+    }};
+    ll.appendChild(img);
+  }});
+  applyCtrl();
+  document.querySelectorAll('.si').forEach((el,j)=>el.classList.toggle('on',j===i));
+  document.getElementById('fi').textContent=
+    `SEG ${{i+1}}/${{SEGS.length}} · ${{s.start.toFixed(2)}}s→${{s.end.toFixed(2)}}s · f${{s.start_frame}}–${{s.end_frame}}`;
+}}
+
+function applyCtrl(){{
+  const s=SEGS[cur];
+  const font=document.getElementById('cfont').value;
+  const size=document.getElementById('csize').value;
+  const col=document.getElementById('ccol').value;
+  const pos=document.getElementById('cpos').value;
+  const sc=document.getElementById('cscale').value;
+  const fmt=document.getElementById('cf').value;
+  document.getElementById('csizev').textContent=size;
+  document.getElementById('cscalev').textContent=parseFloat(sc).toFixed(2);
+  const stxt=document.getElementById('stxt');
+  stxt.textContent=s.text; stxt.style.fontFamily=font;
+  stxt.style.fontSize=size+'px'; stxt.style.color=col;
+  const sub=document.getElementById('sub');
+  sub.style.bottom=pos==='bottom'?'0':'';
+  sub.style.top=pos==='top'?'0':pos==='center'?'50%':'';
+  document.querySelectorAll('.lg').forEach(img=>img.style.height=Math.round(52*parseFloat(sc))+'px');
+  applyFormat(fmt);
+}}
+
+function syncCol(v){{ document.getElementById('ccolh').value=v; applyCtrl(); }}
+function syncHex(v){{ if(/^#[0-9A-Fa-f]{{6}}$/.test(v))document.getElementById('ccol').value=v; applyCtrl(); }}
+
+function buildList(){{
+  const el=document.getElementById('segs');
+  SEGS.forEach((s,i)=>{{
+    sfx[i]=false;
+    const d=document.createElement('div'); d.className='si'+(i===0?' on':'');
+    d.innerHTML=`<div class="si-hd">
+      <span class="si-co">${{s.country.flag}} ${{s.country.name}}</span>
+      <button class="sfxb" id="sx${{i}}" onclick="tsfx(${{i}},event)">SFX</button></div>
+      <div class="si-t">${{s.start.toFixed(2)}}s – ${{s.end.toFixed(2)}}s</div>
+      <div class="si-tx">${{s.text}}</div>`;
+    d.addEventListener('click',e=>{{ if(e.target.classList.contains('sfxb'))return; loadSeg(i); }});
     el.appendChild(d);
-  });
-}
+  }});
+}}
 
-function goTo(i) {
-  cur = i;
-  document.querySelectorAll('.seg-item').forEach(e=>e.classList.remove('active'));
-  const si = document.getElementById('si'+i);
-  if(si){si.classList.add('active');si.scrollIntoView({block:'nearest'});}
-  document.getElementById('seg-slider').value = i;
-  document.getElementById('seg-info').textContent = `${i+1} / ${segs.length}`;
-  updatePreview();
-}
+function tsfx(i,e){{
+  e.stopPropagation(); sfx[i]=!sfx[i];
+  const b=document.getElementById('sx'+i); b.classList.toggle('on',sfx[i]);
+}}
 
-function updatePreview() {
-  const s = segs[cur];
-  // Map
-  const mc = s.map_center;
-  map.flyTo([mc.lat, mc.lon], mc.zoom||5, {duration:0.5});
-  if(countryLayer){map.removeLayer(countryLayer);}
+function doValidate(){{
+  const font=document.getElementById('cfont').value;
+  const size=parseInt(document.getElementById('csize').value);
+  const col=document.getElementById('ccol').value;
+  const pos=document.getElementById('cpos').value;
+  const anim=document.getElementById('canim').value;
+  const sc=parseFloat(document.getElementById('cscale').value);
+  const fmt=document.getElementById('cf').value;
+  const spec={{
+    meta:DATA.config,
+    segments:SEGS.map((s,i)=>Object.assign({{...s}},{{sfx_trigger:sfx[i]||false}})),
+    display:{{font,font_color:col,font_size:size,position:pos,animation:anim,visual_scale:sc}},
+    format:fmt, map_style:CFG.map_style||'satellite',
+    map_config:CFG.map_config||{{}},
+    validated_at:new Date().toISOString(),
+  }};
+  fetch('/api/save',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(spec)}})
+  .then(r=>r.json()).then(d=>{{
+    const m=document.getElementById('smsg');
+    if(d.ok){{ m.className='ok'; m.textContent='✓ render_spec.json → Gate 3 DEATHWING'; }}
+    else{{ m.className='er'; m.textContent='✗ '+(d.error||'?'); }}
+  }}).catch(e=>{{ const m=document.getElementById('smsg'); m.className='er'; m.textContent='✗ '+e; }});
+}}
 
-  // Logos
-  const logoWrap = document.getElementById('logo-wrap');
-  const logoImg  = document.getElementById('logo-img');
-  const nav      = document.getElementById('logo-nav');
-  nav.innerHTML  = '';
-  if(s.logos.length > 0) {
-    logoImg.src = s.logos[0].url;
-    logoImg.onerror = () => { logoImg.src=''; logoImg.alt=s.logos[0].brand; };
-    s.logos.forEach((l,j) => {
-      const d = document.createElement('div');
-      d.className = 'logo-dot' + (j===0?' active':'');
-      d.onclick = () => {
-        logoImg.src = l.url;
-        nav.querySelectorAll('.logo-dot').forEach((dd,k)=>dd.classList.toggle('active',k===j));
-      };
-      nav.appendChild(d);
-    });
-  } else {
-    logoImg.src=''; logoImg.alt='—';
-  }
+window.addEventListener('load',()=>{{
+  const d=CFG.display||{{}};
+  if(d.font) document.getElementById('cfont').value=d.font;
+  if(d.font_size) document.getElementById('csize').value=d.font_size;
+  if(d.font_color){{ document.getElementById('ccol').value=d.font_color; document.getElementById('ccolh').value=d.font_color; }}
+  if(d.position) document.getElementById('cpos').value=d.position;
+  if(d.animation) document.getElementById('canim').value=d.animation;
+  if(d.visual_scale) document.getElementById('cscale').value=d.visual_scale;
+  document.getElementById('cf').value=CFG.format||'short';
+  buildList(); initMap();
+}});
+</script></body></html>'''
 
-  // Subtitle
-  const stEl = document.getElementById('subtitle-text');
-  stEl.textContent = s.text.substring(0,60);
-  stEl.style.fontFamily = document.getElementById('c-font').value;
-  stEl.style.color      = document.getElementById('c-color').value;
-  stEl.style.fontSize   = (document.getElementById('c-size').value/3)+'px';
+_timing = _config = _segments = None
+_shutdown = threading.Event()
 
-  // Countries
-  document.getElementById('countries-display').textContent = s.countries.join(' · ');
-
-  // SFX
-  const btn = document.getElementById('sfx-btn');
-  btn.textContent = s.sfx_trigger ? 'SFX ●' : 'SFX ○';
-  btn.className   = 'sfx-btn' + (s.sfx_trigger ? ' on' : '');
-}
-
-function toggleSfx() {
-  segs[cur].sfx_trigger = !segs[cur].sfx_trigger;
-  updatePreview();
-}
-
-// Controls live update
-['c-font','c-color','c-size','c-pos','c-anim','c-scale'].forEach(id=>{
-  document.getElementById(id).addEventListener('input', updatePreview);
-});
-
-document.getElementById('seg-slider').addEventListener('input', e => goTo(+e.target.value));
-document.getElementById('seg-slider').max = segs.length - 1;
-
-function validate() {
-  const display = {
-    font:       document.getElementById('c-font').value,
-    font_color: document.getElementById('c-color').value,
-    font_size:  +document.getElementById('c-size').value,
-    position:   document.getElementById('c-pos').value,
-    animation:  document.getElementById('c-anim').value,
-    visual_scale: +document.getElementById('c-scale').value,
-  };
-  const payload = { segments: segs, display, format: DATA.format, map_style: DATA.map_style, meta: DATA.meta };
-  document.getElementById('status').textContent = 'Envoi...';
-  fetch('/api/save', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
-    .then(r=>r.json())
-    .then(d=>{ document.getElementById('status').textContent = d.ok ? '✓ render_spec.json sauvegardé' : '✗ '+d.error; })
-    .catch(e=>{ document.getElementById('status').textContent = '✗ '+e; });
-}
-
-buildSegList();
-goTo(0);
-</script>
-</body>
-</html>
-"""
-
-
-class Handler(http.server.BaseHTTPRequestHandler):
-    preview_data = {}
-
-    def log_message(self, *a): pass
-
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self,*a): pass
     def do_GET(self):
-        html = HTML_TEMPLATE.replace("__DATA__", json.dumps(self.preview_data))
+        html = build_html(_segments, _config).encode("utf-8")
         self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.end_headers()
-        self.wfile.write(html.encode())
-
+        self.send_header("Content-Type","text/html; charset=utf-8")
+        self.end_headers(); self.wfile.write(html)
     def do_POST(self):
-        length = int(self.headers.get("Content-Length", 0))
-        body   = json.loads(self.rfile.read(length))
-
-        # Load original timing words
-        timing = json.loads(TIMING_PATH.read_text()) if TIMING_PATH.exists() else {}
-        words  = timing.get("words", [])
-
-        segs = body.get("segments", [])
-        # Merge sfx_trigger + media_type into segments
-        for s in segs:
-            s.setdefault("sfx_trigger", False)
-            s.setdefault("media_type", "logo")
-
-        render_spec = {
-            "meta":     body.get("meta", timing.get("meta", {})),
-            "words":    words,
-            "segments": segs,
-            "display":  body.get("display", {}),
-            "format":   body.get("format", "short"),
-            "map_style": body.get("map_style", "satellite"),
-        }
-
-        CALIBAN_OUT.mkdir(parents=True, exist_ok=True)
-        (CALIBAN_OUT / "render_spec.json").write_text(json.dumps(render_spec, indent=2, ensure_ascii=False))
-        (CALIBAN_OUT / "config_final.json").write_text(json.dumps(body.get("display", {}), indent=2))
-
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.end_headers()
-        self.wfile.write(json.dumps({"ok": True}).encode())
-
-        threading.Thread(target=self.server.shutdown, daemon=True).start()
-
+        if self.path != "/api/save":
+            self.send_response(404); self.end_headers(); return
+        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length",0))))
+        body["words"] = _timing.get("words",[])
+        os.makedirs(F02OUT, exist_ok=True)
+        path = os.path.join(F02OUT,"render_spec.json")
+        with open(path,"w",encoding="utf-8") as f: json.dump(body,f,indent=2,ensure_ascii=False)
+        resp = json.dumps({"ok":True,"path":path}).encode()
+        self.send_response(200); self.send_header("Content-Type","application/json"); self.end_headers()
+        self.wfile.write(resp)
+        print(f"\n[CALIBAN] render_spec.json → {path}")
+        print("[CALIBAN] Gate 2 validée → python CYPHER_EXECUTEUR.py gate3")
+        _shutdown.set()
 
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+    global _timing, _config, _segments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port",type=int,default=8080)
+    args = parser.parse_args()
 
-    if not TIMING_PATH.exists():
-        # fallback: check LION_OUT
-        lp = LION_OUT / "timing.json"
-        if lp.exists():
-            CALIBAN_IN.mkdir(parents=True, exist_ok=True)
-            import shutil
-            shutil.copy(lp, TIMING_PATH)
-        else:
-            print("[CALIBAN] timing.json introuvable. Lancez d'abord gate1_done.")
-            sys.exit(1)
+    for p in [os.path.join(F01OUT,"timing.json"), os.path.join(F02IN,"timing.json")]:
+        if os.path.exists(p):
+            with open(p) as f: _timing = json.load(f)
+            print(f"[CALIBAN] timing: {p}"); break
+    for p in [os.path.join(F01OUT,"config.json"), os.path.join(F02IN,"config.json")]:
+        if os.path.exists(p):
+            with open(p) as f: _config = json.load(f)
+            print(f"[CALIBAN] config: {p}"); break
+    if _timing is None:
+        print("[CALIBAN] ERREUR: timing.json introuvable"); sys.exit(1)
+    _config = _config or {}
+    _segments = build_segments(_timing, _config)
+    print(f"[CALIBAN] {len(_segments)} segments | preview → http://localhost:{args.port}")
 
-    if not CONFIG_PATH.exists():
-        lc = LION_OUT / "config.json"
-        if lc.exists():
-            import shutil
-            shutil.copy(lc, CONFIG_PATH)
-        else:
-            CONFIG_PATH.write_text("{}")
-
-    print("[CALIBAN] Analyse des segments en cours...", flush=True)
-    timing = json.loads(TIMING_PATH.read_text())
-    config = json.loads(CONFIG_PATH.read_text())
-    data   = build_preview_data(timing, config)
-
-    Handler.preview_data = data
-    srv = http.server.HTTPServer(("0.0.0.0", port), Handler)
-    print(f"[CALIBAN] Preview sur http://localhost:{port}", flush=True)
-    print(f"[CALIBAN] {len(data['segments'])} segments | {data['format']} | {data['map_style']}", flush=True)
-    srv.serve_forever()
-
+    srv = http.server.HTTPServer(("0.0.0.0", args.port), H)
+    def serve():
+        while not _shutdown.is_set(): srv.handle_request()
+    threading.Thread(target=serve, daemon=True).start()
+    _shutdown.wait()
+    print("[CALIBAN] Fermé.")
 
 if __name__ == "__main__":
     main()
