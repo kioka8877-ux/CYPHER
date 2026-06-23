@@ -434,7 +434,7 @@ class Handler(BaseHTTPRequestHandler):
         threading.Thread(target=stop, daemon=True).start()
 
 
-port = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+port = int(sys.argv[sys.argv.index("--port")+1]) if "--port" in sys.argv else 8080
 server = HTTPServer(("0.0.0.0", port), Handler)
 print(f"[CALIBAN] Gate 2 preview → http://localhost:{port}")
 server.serve_forever()
