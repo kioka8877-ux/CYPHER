@@ -1,382 +1,221 @@
-"""
-cyp_caliban.py — F02 CALIBAN — CYPHER
-======================================
-Preview visuel : Leaflet satellite + logos brands + sous-titres.
-Inspiré architecture DORN F02 CASTELLAN.
-Stack : http.server + Leaflet.js + base64 data injection.
+#!/usr/bin/env python3
+"""F02 CALIBAN v4 — Preview visuel interactif CYPHER"""
+import json, os, sys, threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
+from urllib.parse import urlparse
 
-Usage : python cyp_caliban.py [--port 8080]
-Entrées  : F01_LION/OUT/timing.json + config.json
-Sorties  : F02_CALIBAN/OUT/render_spec.json
-"""
-import argparse, base64, http.server, json, os, sys, threading
+BASE = Path(__file__).parent.parent
+IN   = BASE / "IN"
+OUT  = BASE / "OUT"
+OUT.mkdir(exist_ok=True)
 
-def find_root():
-    d = os.path.dirname(os.path.abspath(__file__))
-    while d != os.path.dirname(d):
-        if os.path.exists(os.path.join(d, "cypher_ledger.json")):
-            return d
-        d = os.path.dirname(d)
-    return os.getcwd()
-
-ROOT   = find_root()
-F01OUT = os.path.join(ROOT, "F01_LION", "OUT")
-F02IN  = os.path.join(ROOT, "F02_CALIBAN", "IN")
-F02OUT = os.path.join(ROOT, "F02_CALIBAN", "OUT")
-
-COUNTRY_DB = {
-    "united states":{"iso":"US","lat":37.09,"lon":-95.71,"zoom":4,"flag":"🇺🇸","name":"United States"},
-    "usa":          {"iso":"US","lat":37.09,"lon":-95.71,"zoom":4,"flag":"🇺🇸","name":"United States"},
-    "germany":      {"iso":"DE","lat":51.16,"lon":10.45, "zoom":5,"flag":"🇩🇪","name":"Germany"},
-    "japan":        {"iso":"JP","lat":36.2, "lon":138.25,"zoom":5,"flag":"🇯🇵","name":"Japan"},
-    "south korea":  {"iso":"KR","lat":35.91,"lon":127.77,"zoom":6,"flag":"🇰🇷","name":"South Korea"},
-    "korea":        {"iso":"KR","lat":35.91,"lon":127.77,"zoom":6,"flag":"🇰🇷","name":"South Korea"},
-    "france":       {"iso":"FR","lat":46.23,"lon":2.21,  "zoom":5,"flag":"🇫🇷","name":"France"},
-    "italy":        {"iso":"IT","lat":41.87,"lon":12.57, "zoom":5,"flag":"🇮🇹","name":"Italy"},
-    "sweden":       {"iso":"SE","lat":60.13,"lon":18.64, "zoom":5,"flag":"🇸🇪","name":"Sweden"},
-    "china":        {"iso":"CN","lat":35.86,"lon":104.19,"zoom":4,"flag":"🇨🇳","name":"China"},
-    "canada":       {"iso":"CA","lat":56.13,"lon":-106.35,"zoom":4,"flag":"🇨🇦","name":"Canada"},
-    "uk":           {"iso":"GB","lat":55.38,"lon":-3.44, "zoom":5,"flag":"🇬🇧","name":"United Kingdom"},
-    "united kingdom":{"iso":"GB","lat":55.38,"lon":-3.44,"zoom":5,"flag":"🇬🇧","name":"United Kingdom"},
-    "uae":          {"iso":"AE","lat":23.42,"lon":53.85, "zoom":6,"flag":"🇦🇪","name":"UAE"},
-    "taiwan":       {"iso":"TW","lat":23.69,"lon":120.96,"zoom":7,"flag":"🇹🇼","name":"Taiwan"},
-    "switzerland":  {"iso":"CH","lat":46.82,"lon":8.23,  "zoom":6,"flag":"🇨🇭","name":"Switzerland"},
-    "netherlands":  {"iso":"NL","lat":52.13,"lon":5.29,  "zoom":7,"flag":"🇳🇱","name":"Netherlands"},
-    "spain":        {"iso":"ES","lat":40.46,"lon":-3.75, "zoom":6,"flag":"🇪🇸","name":"Spain"},
-    "india":        {"iso":"IN","lat":20.59,"lon":78.96, "zoom":5,"flag":"🇮🇳","name":"India"},
-    "australia":    {"iso":"AU","lat":-25.27,"lon":133.77,"zoom":4,"flag":"🇦🇺","name":"Australia"},
-    "singapore":    {"iso":"SG","lat":1.35, "lon":103.82,"zoom":11,"flag":"🇸🇬","name":"Singapore"},
-    "finland":      {"iso":"FI","lat":61.92,"lon":25.75, "zoom":6,"flag":"🇫🇮","name":"Finland"},
-    "denmark":      {"iso":"DK","lat":56.26,"lon":9.50,  "zoom":6,"flag":"🇩🇰","name":"Denmark"},
-    "brazil":       {"iso":"BR","lat":-14.24,"lon":-51.93,"zoom":4,"flag":"🇧🇷","name":"Brazil"},
-    "turkey":       {"iso":"TR","lat":38.96,"lon":35.24, "zoom":5,"flag":"🇹🇷","name":"Turkey"},
-    "ottoman":      {"iso":"TR","lat":41.01,"lon":28.98, "zoom":7,"flag":"🌙","name":"Ottoman Empire"},
-    "byzantine":    {"iso":"GR","lat":41.01,"lon":28.98, "zoom":8,"flag":"🏛️","name":"Byzantine Empire"},
-    "constantinople":{"iso":"TR","lat":41.01,"lon":28.98,"zoom":9,"flag":"🏙️","name":"Constantinople"},
-    "istanbul":     {"iso":"TR","lat":41.01,"lon":28.98, "zoom":9,"flag":"🕌","name":"Istanbul"},
-    "russia":       {"iso":"RU","lat":61.52,"lon":105.32,"zoom":3,"flag":"🇷🇺","name":"Russia"},
-    "mexico":       {"iso":"MX","lat":23.63,"lon":-102.55,"zoom":5,"flag":"🇲🇽","name":"Mexico"},
-    "indonesia":    {"iso":"ID","lat":-0.79,"lon":113.92, "zoom":4,"flag":"🇮🇩","name":"Indonesia"},
-    "saudi arabia": {"iso":"SA","lat":23.89,"lon":45.08,  "zoom":5,"flag":"🇸🇦","name":"Saudi Arabia"},
-    "south africa": {"iso":"ZA","lat":-30.56,"lon":22.94, "zoom":5,"flag":"🇿🇦","name":"South Africa"},
-    "argentina":    {"iso":"AR","lat":-38.42,"lon":-63.62,"zoom":4,"flag":"🇦🇷","name":"Argentina"},
-    "poland":       {"iso":"PL","lat":51.92,"lon":19.15,  "zoom":6,"flag":"🇵🇱","name":"Poland"},
+COUNTRY_COORDS = {
+    "united states":{"lat":38,"lon":-97,"zoom":4,"iso":"US","flag":"🇺🇸"},
+    "usa":{"lat":38,"lon":-97,"zoom":4,"iso":"US","flag":"🇺🇸"},
+    "germany":{"lat":51.2,"lon":10.5,"zoom":5,"iso":"DE","flag":"🇩🇪"},
+    "japan":{"lat":36.2,"lon":138.3,"zoom":5,"iso":"JP","flag":"🇯🇵"},
+    "south korea":{"lat":35.9,"lon":127.8,"zoom":6,"iso":"KR","flag":"🇰🇷"},
+    "korea":{"lat":35.9,"lon":127.8,"zoom":6,"iso":"KR","flag":"🇰🇷"},
+    "france":{"lat":46.2,"lon":2.2,"zoom":5,"iso":"FR","flag":"🇫🇷"},
+    "italy":{"lat":41.9,"lon":12.6,"zoom":5,"iso":"IT","flag":"🇮🇹"},
+    "sweden":{"lat":60.1,"lon":18.6,"zoom":5,"iso":"SE","flag":"🇸🇪"},
+    "china":{"lat":35.9,"lon":104.2,"zoom":4,"iso":"CN","flag":"🇨🇳"},
+    "canada":{"lat":56.1,"lon":-106.3,"zoom":4,"iso":"CA","flag":"🇨🇦"},
+    "united kingdom":{"lat":55.4,"lon":-3.4,"zoom":5,"iso":"GB","flag":"🇬🇧"},
+    "uk":{"lat":55.4,"lon":-3.4,"zoom":5,"iso":"GB","flag":"🇬🇧"},
+    "united arab emirates":{"lat":23.4,"lon":53.8,"zoom":6,"iso":"AE","flag":"🇦🇪"},
+    "uae":{"lat":23.4,"lon":53.8,"zoom":6,"iso":"AE","flag":"🇦🇪"},
+    "taiwan":{"lat":23.7,"lon":121.0,"zoom":7,"iso":"TW","flag":"🇹🇼"},
+    "switzerland":{"lat":46.8,"lon":8.2,"zoom":7,"iso":"CH","flag":"🇨🇭"},
+    "netherlands":{"lat":52.1,"lon":5.3,"zoom":7,"iso":"NL","flag":"🇳🇱"},
+    "spain":{"lat":40.4,"lon":-3.7,"zoom":5,"iso":"ES","flag":"🇪🇸"},
+    "india":{"lat":20.6,"lon":78.9,"zoom":4,"iso":"IN","flag":"🇮🇳"},
+    "australia":{"lat":-25.3,"lon":133.8,"zoom":4,"iso":"AU","flag":"🇦🇺"},
+    "singapore":{"lat":1.3,"lon":103.8,"zoom":10,"iso":"SG","flag":"🇸🇬"},
+    "finland":{"lat":61.9,"lon":25.7,"zoom":5,"iso":"FI","flag":"🇫🇮"},
+    "denmark":{"lat":56.3,"lon":9.5,"zoom":6,"iso":"DK","flag":"🇩🇰"},
+    "brazil":{"lat":-14.2,"lon":-51.9,"zoom":4,"iso":"BR","flag":"🇧🇷"},
 }
-
 BRAND_DOMAINS = {
     "apple":"apple.com","nike":"nike.com","coca-cola":"coca-cola.com",
-    "mcdonald":"mcdonalds.com","tesla":"tesla.com","bmw":"bmw.com",
-    "mercedes":"mercedes-benz.com","adidas":"adidas.com","toyota":"toyota.com",
-    "sony":"sony.com","nintendo":"nintendo.com","samsung":"samsung.com",
-    "hyundai":"hyundai.com","lg":"lg.com","airbus":"airbus.com",
-    "louis vuitton":"louisvuitton.com","ferrari":"ferrari.com","gucci":"gucci.com",
-    "lamborghini":"lamborghini.com","ikea":"ikea.com","volvo":"volvo.com",
-    "spotify":"spotify.com","tiktok":"tiktok.com","huawei":"huawei.com",
-    "dji":"dji.com","shopify":"shopify.com","rolls-royce":"rolls-royce.com",
-    "burberry":"burberry.com","emirates":"emirates.com","tsmc":"tsmc.com",
-    "acer":"acer.com","nestle":"nestle.com","rolex":"rolex.com","ubs":"ubs.com",
-    "philips":"philips.com","heineken":"heineken.com","asml":"asml.com",
-    "zara":"zara.com","tata":"tata.com","qantas":"qantas.com",
-    "atlassian":"atlassian.com","canva":"canva.com","grab":"grab.com",
-    "nokia":"nokia.com","lego":"lego.com","maersk":"maersk.com",
-    "embraer":"embraer.com","amazon":"amazon.com","google":"google.com",
-    "microsoft":"microsoft.com","netflix":"netflix.com",
+    "mcdonald's":"mcdonalds.com","tesla":"tesla.com","bmw":"bmw.com",
+    "mercedes-benz":"mercedes-benz.com","mercedes":"mercedes-benz.com",
+    "adidas":"adidas.com","toyota":"toyota.com","sony":"sony.com",
+    "nintendo":"nintendo.com","samsung":"samsung.com","hyundai":"hyundai.com",
+    "lg":"lg.com","airbus":"airbus.com","louis vuitton":"louisvuitton.com",
+    "ferrari":"ferrari.com","gucci":"gucci.com","lamborghini":"lamborghini.com",
+    "ikea":"ikea.com","volvo":"volvo.com","spotify":"spotify.com",
+    "tiktok":"tiktok.com","huawei":"huawei.com","dji":"dji.com",
+    "shopify":"shopify.com","bombardier":"bombardier.com",
+    "rolls-royce":"rolls-royce.com","burberry":"burberry.com",
+    "british airways":"britishairways.com","emirates":"emirates.com",
+    "tsmc":"tsmc.com","acer":"acer.com","nestle":"nestle.com",
+    "rolex":"rolex.com","ubs":"ubs.com","philips":"philips.com",
+    "heineken":"heineken.com","asml":"asml.com","zara":"zara.com",
+    "santander":"santander.com","reliance":"relianceindustries.com",
+    "qantas":"qantas.com","atlassian":"atlassian.com","canva":"canva.com",
+    "grab":"grab.com","singapore airlines":"singaporeair.com",
+    "nokia":"nokia.com","kone":"kone.com","lego":"lego.com",
+    "maersk":"maersk.com","embraer":"embraer.com",
 }
 
-def extract_country(text):
-    t = text.lower()
-    for key in sorted(COUNTRY_DB.keys(), key=len, reverse=True):
-        if key in t:
-            return COUNTRY_DB[key]
-    return {"iso":"WW","lat":20.0,"lon":0.0,"zoom":2,"flag":"🌍","name":"World"}
+def extract(text):
+    t=text.lower()
+    countries=[{"name":n.title(),**d} for n,d in COUNTRY_COORDS.items() if n in t]
+    brands=[{"name":b.title(),"domain":dm,"logo":f"https://logo.clearbit.com/{dm}"}
+            for b,dm in BRAND_DOMAINS.items() if b in t]
+    return countries,brands
 
-def extract_brands(text):
-    t = text.lower()
-    found = []
-    for brand, domain in sorted(BRAND_DOMAINS.items(), key=lambda x:len(x[0]), reverse=True):
-        if brand in t and domain not in [b["domain"] for b in found]:
-            found.append({"name":brand.title(),"domain":domain,
-                          "logo":f"https://logo.clearbit.com/{domain}"})
-        if len(found) >= 4:
-            break
-    return found
+def build_segs(timing):
+    out=[]
+    for i,s in enumerate(timing.get("segments",[])):
+        text=s.get("text","")
+        countries,brands=extract(text)
+        primary=countries[0] if countries else {"lat":20,"lon":0,"zoom":2,"iso":"XX","flag":"🌍","name":"World"}
+        out.append({"id":i,"start":s.get("start",0),"end":s.get("end",0),"text":text.strip(),
+                    "countries":countries,"brands":brands,"primary":primary,"sfx":False,"visual_override":None})
+    return out
 
-def build_segments(timing, config):
-    return [{
-        "id": s["id"], "text": s["text"],
-        "start": s["start"], "end": s["end"],
-        "start_frame": s["start_frame"], "end_frame": s["end_frame"],
-        "country":  extract_country(s["text"]),
-        "brands":   extract_brands(s["text"]),
-        "sfx_trigger": False, "media_type": "image",
-    } for s in timing.get("segments", [])]
-
-def build_html(segments, config):
-    font_opts = "".join(
-        f'<option value="{f}">{f}</option>'
-        for f in ["Cinzel","Arial","Arial Black","Georgia","Impact","Verdana","Courier New"]
-    )
-    payload_b64 = base64.b64encode(
-        json.dumps({"segments":segments,"config":config}, ensure_ascii=False).encode()
-    ).decode("ascii")
-    return f'''<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>CYPHER F02 CALIBAN</title>
+HTML=r"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>CYPHER Gate 2</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
-*{{box-sizing:border-box;margin:0;padding:0}}
-body{{background:#050B08;color:#c8c8c8;font-family:monospace;font-size:12px;height:100vh;display:flex;flex-direction:column;overflow:hidden}}
-#hdr{{background:#0a120e;border-bottom:1px solid #1a3020;padding:7px 16px;display:flex;justify-content:space-between;align-items:center}}
-#hdr h1{{font-size:13px;letter-spacing:3px;color:#00FFD1}}
-#hdr span{{font-size:10px;color:#446644}}
-#main{{display:flex;flex:1;overflow:hidden}}
-#left{{width:255px;min-width:255px;background:#060d09;border-right:1px solid #1a3020;display:flex;flex-direction:column;overflow:hidden}}
-#segs{{flex:1;overflow-y:auto;padding:6px}}
-.si{{padding:5px 8px;margin:2px 0;cursor:pointer;border-left:2px solid #1a3020;border-radius:2px}}
-.si:hover,.si.on{{background:#0d1e12;border-left-color:#00FFD1}}
-.si-hd{{display:flex;justify-content:space-between;align-items:center}}
-.si-co{{font-size:11px;color:#88cc88}}
-.si-t{{font-size:10px;color:#446644}}
-.si-tx{{font-size:10px;color:#556655;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}}
-.sfxb{{font-size:9px;padding:1px 5px;background:#1a0a0a;border:1px solid #330000;color:#884444;cursor:pointer;border-radius:2px}}
-.sfxb.on{{background:#330000;border-color:#B30006;color:#ff7070}}
-#ctrl{{padding:10px;border-top:1px solid #1a3020}}
-.cr{{display:flex;align-items:center;margin:3px 0;gap:5px}}
-.cl{{width:80px;color:#556655;font-size:11px;flex-shrink:0}}
-.cr select,.cr input[type=text]{{flex:1;background:#0a1a0e;border:1px solid #1a3020;color:#c8c8c8;padding:3px 5px;font-family:monospace;font-size:11px}}
-.cr input[type=range]{{flex:1;accent-color:#00FFD1}}
-.cr input[type=color]{{width:28px;height:22px;border:1px solid #1a3020;cursor:pointer}}
-.vv{{width:34px;font-size:10px;color:#88cc88}}
-#vbtn{{width:100%;margin-top:8px;padding:8px;background:#002b1a;border:1px solid #00FFD1;color:#00FFD1;font-family:monospace;font-size:11px;letter-spacing:2px;cursor:pointer}}
-#vbtn:hover{{background:#00FFD1;color:#050B08}}
-#smsg{{margin-top:6px;padding:5px 8px;border-radius:3px;display:none;font-size:10px}}
-#smsg.ok{{background:#002b1a;border:1px solid #00FFD1;color:#00FFD1;display:block}}
-#smsg.er{{background:#2b0000;border:1px solid #B30006;color:#ff7070;display:block}}
-#right{{flex:1;display:flex;align-items:center;justify-content:center;background:#030805;position:relative}}
-#fw{{position:relative;border:1px solid #1a3020;box-shadow:0 0 30px rgba(0,255,200,.06)}}
-#map{{width:100%;height:100%}}
-#logos{{position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);display:flex;gap:10px;align-items:center;justify-content:center;pointer-events:none;z-index:400}}
-.lg{{height:52px;width:auto;object-fit:contain;background:rgba(0,0,0,.6);border-radius:5px;padding:4px 8px;border:1px solid rgba(255,255,255,.12)}}
-.lg-txt{{background:rgba(0,0,0,.6);border:1px solid #446644;padding:4px 8px;border-radius:4px;font-size:11px;color:#88cc88}}
-#sub{{position:absolute;left:0;right:0;padding:10px 14px;background:linear-gradient(transparent,rgba(0,0,0,.8));z-index:500;text-align:center;pointer-events:none}}
-#stxt{{display:inline-block;text-shadow:2px 2px 4px #000,0 0 6px #000}}
-#cbadge{{position:absolute;top:10px;left:10px;background:rgba(5,11,8,.88);border:1px solid #1a3020;border-radius:3px;padding:4px 9px;z-index:500;font-size:12px}}
-#fbadge{{position:absolute;top:10px;right:10px;background:rgba(0,43,26,.88);border:1px solid #00FFD1;border-radius:3px;padding:3px 7px;z-index:500;font-size:9px;color:#00FFD1;letter-spacing:1px}}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#050B08;color:#e8e4d0;font-family:'Segoe UI',sans-serif;display:flex;height:100vh;overflow:hidden}
+#sb{width:290px;flex-shrink:0;background:#08120a;border-right:1px solid #162018;display:flex;flex-direction:column}
+#ctrl{padding:10px;border-bottom:1px solid #162018}
+#ctrl h3{color:#b30006;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px}
+.cr{display:flex;align-items:center;gap:5px;margin-bottom:5px;font-size:11px}
+.cr label{width:80px;color:#556;flex-shrink:0}
+.cr select,.cr input{flex:1;background:#0d1e10;border:1px solid #1c2e1e;color:#e8e4d0;padding:3px 5px;border-radius:2px;font-size:11px}
+.cr input[type=range]{padding:0}
+.cr span{font-size:10px;color:#667;width:32px}
+#vbtn{width:100%;padding:10px;background:#b30006;color:#fff;border:none;cursor:pointer;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:bold;margin-top:7px}
+#vbtn:hover{background:#d40008}
+#slist{flex:1;overflow-y:auto}
+.si{padding:7px 11px;border-bottom:1px solid #0d1a0e;cursor:pointer}
+.si:hover,.si.active{background:#0d2014}
+.si.active{border-left:3px solid #b30006}
+.st{font-size:10px;color:#334}
+.sx{font-size:11px;color:#889;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.sf{font-size:12px;margin-top:2px}
+.sfb{padding:2px 6px;font-size:10px;border:1px solid #1c2e1e;background:transparent;color:#445;cursor:pointer;border-radius:2px;margin-top:3px}
+.sfb.on{border-color:#b30006;color:#b30006}
+#main{flex:1;display:flex;flex-direction:column}
+#map{flex:1}
+#fr{height:105px;background:#050B08;border-top:1px solid #162018;display:flex;align-items:center;gap:10px;padding:8px 13px}
+#lg{display:flex;gap:5px;align-items:center;flex-wrap:wrap;min-width:90px}
+#lg img{height:30px;background:#fff;border-radius:3px;padding:2px}
+#sw{flex:1;height:85px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px}
+#st{font-size:16px;color:#fff;text-shadow:0 2px 5px #000;padding:3px 8px;background:rgba(0,0,0,.5);border-radius:3px}
+#inf{font-size:10px;color:#334;white-space:nowrap}
+#fb{background:#b30006;color:#fff;padding:1px 6px;border-radius:2px;font-size:10px;margin-left:5px}
 </style></head><body>
-<meta id="pl" data-b="{payload_b64}">
-<div id="hdr"><h1>⬡ CYPHER F02 — CALIBAN</h1><span id="fi">—</span></div>
-<div id="main">
-  <div id="left">
-    <div id="segs"></div>
-    <div id="ctrl">
-      <div style="color:#00FFD1;font-size:10px;letter-spacing:2px;margin-bottom:5px">PARAMÈTRES</div>
-      <div class="cr"><span class="cl">Format</span>
-        <select id="cf" onchange="applyCtrl()"><option value="short">SHORT 9:16</option><option value="long">LONG 16:9</option></select></div>
-      <div class="cr"><span class="cl">Police</span>
-        <select id="cfont" onchange="applyCtrl()">{font_opts}</select></div>
-      <div class="cr"><span class="cl">Taille</span>
-        <input type="range" id="csize" min="18" max="72" value="52" oninput="applyCtrl()">
-        <span class="vv" id="csizev">52</span></div>
-      <div class="cr"><span class="cl">Couleur</span>
-        <input type="color" id="ccol" value="#FFFFFF" oninput="syncCol(this.value)">
-        <input type="text" id="ccolh" value="#FFFFFF" maxlength="7" style="width:64px" oninput="syncHex(this.value)"></div>
-      <div class="cr"><span class="cl">Position</span>
-        <select id="cpos" onchange="applyCtrl()">
-          <option value="bottom">Bas</option><option value="center">Centre</option><option value="top">Haut</option></select></div>
-      <div class="cr"><span class="cl">Animation</span>
-        <select id="canim" onchange="applyCtrl()">
-          <option value="ltr">Gauche→Droite</option><option value="fade">Fondu</option><option value="none">Aucune</option></select></div>
-      <div class="cr"><span class="cl">Logos scale</span>
-        <input type="range" id="cscale" min="0.3" max="2.0" step="0.05" value="0.85" oninput="applyCtrl()">
-        <span class="vv" id="cscalev">0.85</span></div>
-      <button id="vbtn" onclick="doValidate()">▶ VALIDER GATE 2</button>
-      <div id="smsg"></div>
-    </div>
+<div id="sb">
+  <div id="ctrl">
+    <h3>Imperivm <span id="fb">SHORT</span></h3>
+    <div class="cr"><label>Format</label>
+      <select id="cf" onchange="document.getElementById('fb').textContent=this.value.toUpperCase()">
+        <option value="short">Short 9:16</option><option value="long">Long 16:9</option></select></div>
+    <div class="cr"><label>Police</label>
+      <select id="cfont" onchange="us()">
+        <option value="Cinzel">Cinzel</option><option value="Arial Black">Arrila Black</option>
+        <option value="Times New Roman">Times New Roman</option><option value="Georgia">Georgia</option></select></div>
+    <div class="cr"><label>Couleur</label><input type="color" id="ccol" value="#ffffff" oninput="us()"></div>
+    <div class="cr"><label>Taille</label><input type="range" id="csz" min="14" max="68" value="52" oninput="document.getElementById('szv').textContent=this.value+'px';us()"><span id="szv">52px</span></div>
+    <div class="cr"><label>Position</label>
+      <select id="cpos" onchange="up()"><option value="bottom">Bas</option><option value="center">Centre</option><option value="top">Haut</option></select></div>
+    <div class="cr"><label>Animation</label>
+      <select id="canim"><option value="ltr">Gauche→Droite</option><option value="fade">Fondu</option><option value="none">Aucune</option></select></div>
+    <div class="cr"><label>Scale</label><input type="range" id="csc" min="30" max="150" value="85" oninput="document.getElementById('scv').textContent=this.value+'%'"><span id="scv">85%</span></div>
+    <div class="cr"><label>Carte</label>
+      <select id="cmap" onchange="setT(this.value)">
+        <option value="satellite">Satellite ESRI</option><option value="dark">Dark</option><option value="terrain">Terrain</option></select></div>
+    <button id="vbtn" onclick="save()">✓ VALIDER GATE 2</button>
   </div>
-  <div id="right">
-    <div id="fw">
-      <div id="map"></div>
-      <div id="logos"></div>
-      <div id="sub"><span id="stxt"></span></div>
-      <div id="cbadge">—</div>
-      <div id="fbadge">SHORT 9:16</div>
-    </div>
+  <div id="slist"></div>
+</div>
+<div id="main"><div id="map"></div>
+  <div id="fr">
+    <div id="lg"></div>
+    <div id="sw"><div id="st">Sous-titre preview</div></div>
+    <div id="inf">SEG 0</div>
   </div>
 </div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const DATA = JSON.parse(atob(document.getElementById('pl').dataset.b));
-const SEGS = DATA.segments, CFG = DATA.config;
-let map, cur=0, sfx={{}};
+const S=__SEGS__;const C=__CFG__;let cur=0,tl,hl;
+const map=L.map('map',{zoomControl:true,attributionControl:false});
+function setT(s){if(tl)map.removeLayer(tl);
+  const m={satellite:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    dark:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    terrain:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'};
+  tl=L.tileLayer(m[s]).addTo(map);}
+setT('satellite');
+function show(i){cur=i;const s=S[i],p=s.primary;
+  map.flyTo([p.lat,p.lon],p.zoom,{duration:1});
+  if(hl)map.removeLayer(hl);
+  hl=L.circle([p.lat,p.lon],{radius:Math.max(40000,600000/Math.pow(2,p.zoom-3)),
+    color:'#fff',weight:3,fillColor:'#b30006',fillOpacity:.25}).addTo(map);
+  document.getElementById('lg').innerHTML=s.brands.slice(0,5).map(b=>
+    `<img src="${b.logo}" title="${b.name}" onerror="this.style.display='none'">`).join('');
+  document.getElementById('st').textContent=s.text.length>70?s.text.slice(0,70)+'…':s.text;
+  document.getElementById('inf').textContent=`SEG ${i} | ${s.start.toFixed(1)}→${s.end.toFixed(1)}s`;
+  us();document.querySelectorAll('.si').forEach((el,j)=>el.classList.toggle('active',j===i));}
+function us(){const el=document.getElementById('st');
+  el.style.fontFamily=document.getElementById('cfont').value;
+  el.style.color=document.getElementById('ccol').value;
+  el.style.fontSize=document.getElementById('csz').value+'px';}
+function up(){const p=document.getElementById('cpos').value,w=document.getElementById('sw');
+  w.style.alignItems=p==='top'?'flex-start':p==='center'?'center':'flex-end';}
+const sl=document.getElementById('slist');
+S.forEach((s,i)=>{const d=document.createElement('div');d.className='si'+(i===0?' active':'');
+  d.innerHTML=`<div class="st">${s.start.toFixed(1)}–${s.end.toFixed(1)}s</div>
+    <div class="sx">${s.text.slice(0,55)}</div><div class="sf">${s.countries.map(c=>c.flag||'').join(' ')}</div>
+    <button class="sfb ${s.sfx?'on':''}" onclick="tsf(event,${i})">${s.sfx?'SFX ●':'SFX ○'}</button>`;
+  d.addEventListener('click',e=>{if(e.target.classList.contains('sfb'))return;show(i);});sl.appendChild(d);});
+function tsf(e,i){e.stopPropagation();S[i].sfx=!S[i].sfx;const b=e.target;
+  b.className='sfb'+(S[i].sfx?' on':'');b.textContent=S[i].sfx?'SFX ●':'SFX ○';}
+function save(){
+  const cfg={format:document.getElementById('cf').value,map_style:document.getElementById('cmap').value,
+    display:{font:document.getElementById('cfont').value,font_color:document.getElementById('ccol').value,
+      font_size:parseInt(document.getElementById('csz').value),position:document.getElementById('cpos').value,
+      animation:document.getElementById('canim').value,visual_scale:parseInt(document.getElementById('csc').value)/100}};
+  fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({segments:S,config:cfg})})
+  .then(r=>r.json()).then(d=>{const b=document.getElementById('vbtn');b.textContent='✓ VALIDÉ';b.style.background='#1a6e2a';});}
+show(0);
+</script></body></html>"""
 
-function frameSize(f){{ return f==='long'?[640,360]:[324,576]; }}
-
-function applyFormat(f){{
-  const [w,h]=frameSize(f), fw=document.getElementById('fw');
-  fw.style.width=w+'px'; fw.style.height=h+'px';
-  document.getElementById('fbadge').textContent=f==='long'?'LONG 16:9':'SHORT 9:16';
-  if(map)map.invalidateSize();
-}}
-
-function initMap(){{
-  map=L.map('map',{{zoomControl:false,attributionControl:false}});
-  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{{z}}/{{y}}/{{x}}',{{maxZoom:18}}).addTo(map);
-  loadSeg(0);
-}}
-
-function loadSeg(i){{
-  cur=i; const s=SEGS[i], c=s.country;
-  map.flyTo([c.lat,c.lon],c.zoom,{{animate:true,duration:0.7}});
-  document.getElementById('cbadge').textContent=c.flag+' '+c.name;
-  const ll=document.getElementById('logos'); ll.innerHTML='';
-  const sc=parseFloat(document.getElementById('cscale').value);
-  s.brands.slice(0,3).forEach(b=>{{
-    const img=document.createElement('img');
-    img.className='lg'; img.style.height=Math.round(52*sc)+'px';
-    img.src=b.logo;
-    img.onerror=()=>{{
-      img.remove();
-      const t=document.createElement('div');
-      t.className='lg-txt'; t.textContent=b.name; ll.appendChild(t);
-    }};
-    ll.appendChild(img);
-  }});
-  applyCtrl();
-  document.querySelectorAll('.si').forEach((el,j)=>el.classList.toggle('on',j===i));
-  document.getElementById('fi').textContent=
-    `SEG ${{i+1}}/${{SEGS.length}} · ${{s.start.toFixed(2)}}s→${{s.end.toFixed(2)}}s · f${{s.start_frame}}–${{s.end_frame}}`;
-}}
-
-function applyCtrl(){{
-  const s=SEGS[cur];
-  const font=document.getElementById('cfont').value;
-  const size=document.getElementById('csize').value;
-  const col=document.getElementById('ccol').value;
-  const pos=document.getElementById('cpos').value;
-  const sc=document.getElementById('cscale').value;
-  const fmt=document.getElementById('cf').value;
-  document.getElementById('csizev').textContent=size;
-  document.getElementById('cscalev').textContent=parseFloat(sc).toFixed(2);
-  const stxt=document.getElementById('stxt');
-  stxt.textContent=s.text; stxt.style.fontFamily=font;
-  stxt.style.fontSize=size+'px'; stxt.style.color=col;
-  const sub=document.getElementById('sub');
-  sub.style.bottom=pos==='bottom'?'0':'';
-  sub.style.top=pos==='top'?'0':pos==='center'?'50%':'';
-  document.querySelectorAll('.lg').forEach(img=>img.style.height=Math.round(52*parseFloat(sc))+'px');
-  applyFormat(fmt);
-}}
-
-function syncCol(v){{ document.getElementById('ccolh').value=v; applyCtrl(); }}
-function syncHex(v){{ if(/^#[0-9A-Fa-f]{{6}}$/.test(v))document.getElementById('ccol').value=v; applyCtrl(); }}
-
-function buildList(){{
-  const el=document.getElementById('segs');
-  SEGS.forEach((s,i)=>{{
-    sfx[i]=false;
-    const d=document.createElement('div'); d.className='si'+(i===0?' on':'');
-    d.innerHTML=`<div class="si-hd">
-      <span class="si-co">${{s.country.flag}} ${{s.country.name}}</span>
-      <button class="sfxb" id="sx${{i}}" onclick="tsfx(${{i}},event)">SFX</button></div>
-      <div class="si-t">${{s.start.toFixed(2)}}s – ${{s.end.toFixed(2)}}s</div>
-      <div class="si-tx">${{s.text}}</div>`;
-    d.addEventListener('click',e=>{{ if(e.target.classList.contains('sfxb'))return; loadSeg(i); }});
-    el.appendChild(d);
-  }});
-}}
-
-function tsfx(i,e){{
-  e.stopPropagation(); sfx[i]=!sfx[i];
-  const b=document.getElementById('sx'+i); b.classList.toggle('on',sfx[i]);
-}}
-
-function doValidate(){{
-  const font=document.getElementById('cfont').value;
-  const size=parseInt(document.getElementById('csize').value);
-  const col=document.getElementById('ccol').value;
-  const pos=document.getElementById('cpos').value;
-  const anim=document.getElementById('canim').value;
-  const sc=parseFloat(document.getElementById('cscale').value);
-  const fmt=document.getElementById('cf').value;
-  const spec={{
-    meta:DATA.config,
-    segments:SEGS.map((s,i)=>Object.assign({{...s}},{{sfx_trigger:sfx[i]||false}})),
-    display:{{font,font_color:col,font_size:size,position:pos,animation:anim,visual_scale:sc}},
-    format:fmt, map_style:CFG.map_style||'satellite',
-    map_config:CFG.map_config||{{}},
-    validated_at:new Date().toISOString(),
-  }};
-  fetch('/api/save',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(spec)}})
-  .then(r=>r.json()).then(d=>{{
-    const m=document.getElementById('smsg');
-    if(d.ok){{ m.className='ok'; m.textContent='✓ render_spec.json → Gate 3 DEATHWING'; }}
-    else{{ m.className='er'; m.textContent='✗ '+(d.error||'?'); }}
-  }}).catch(e=>{{ const m=document.getElementById('smsg'); m.className='er'; m.textContent='✗ '+e; }});
-}}
-
-window.addEventListener('load',()=>{{
-  const d=CFG.display||{{}};
-  if(d.font) document.getElementById('cfont').value=d.font;
-  if(d.font_size) document.getElementById('csize').value=d.font_size;
-  if(d.font_color){{ document.getElementById('ccol').value=d.font_color; document.getElementById('ccolh').value=d.font_color; }}
-  if(d.position) document.getElementById('cpos').value=d.position;
-  if(d.animation) document.getElementById('canim').value=d.animation;
-  if(d.visual_scale) document.getElementById('cscale').value=d.visual_scale;
-  document.getElementById('cf').value=CFG.format||'short';
-  buildList(); initMap();
-}});
-</script></body></html>'''
-
-_timing = _config = _segments = None
-_shutdown = threading.Event()
-
-class H(http.server.BaseHTTPRequestHandler):
-    def log_message(self,*a): pass
+class Handler(BaseHTTPRequestHandler):
+    segs=[];timing={};config={}
+    def log_message(self,*a):pass
     def do_GET(self):
-        html = build_html(_segments, _config).encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type","text/html; charset=utf-8")
-        self.end_headers(); self.wfile.write(html)
+        if urlparse(self.path).path=='/':
+            h=HTML.replace('__SEGS__',json.dumps(self.segs,ensure_ascii=False)).replace('__CFG__',json.dumps(self.config,ensure_ascii=False))
+            self.send_response(200);self.send_header('Content-Type','text/html;charset=utf-8');self.end_headers();self.wfile.write(h.encode())
+        else:self.send_response(404);self.end_headers()
     def do_POST(self):
-        if self.path != "/api/save":
-            self.send_response(404); self.end_headers(); return
-        body = json.loads(self.rfile.read(int(self.headers.get("Content-Length",0))))
-        body["words"] = _timing.get("words",[])
-        os.makedirs(F02OUT, exist_ok=True)
-        path = os.path.join(F02OUT,"render_spec.json")
-        with open(path,"w",encoding="utf-8") as f: json.dump(body,f,indent=2,ensure_ascii=False)
-        resp = json.dumps({"ok":True,"path":path}).encode()
-        self.send_response(200); self.send_header("Content-Type","application/json"); self.end_headers()
-        self.wfile.write(resp)
-        print(f"\n[CALIBAN] render_spec.json → {path}")
-        print("[CALIBAN] Gate 2 validée → python CYPHER_EXECUTEUR.py gate3")
-        _shutdown.set()
+        data=json.loads(self.rfile.read(int(self.headers.get('Content-Length',0))))
+        segs=data.get('segments',[]);cfg=data.get('config',{})
+        spec={"run_id":self.config.get('run_id',''),"meta":self.timing.get('meta',{}),"words":self.timing.get('words',[]),
+              "segments":[{"id":s['id'],"start":s['start'],"end":s['end'],"text":s['text'],"countries":s.get('countries',[]),
+              "brands":s.get('brands',[]),"primary":s.get('primary',{}),"sfx_trigger":s.get('sfx',False),
+              "media_type":"image","visual_file":s.get('visual_override','')} for s in segs],
+              "display":cfg.get('display',{}),"format":cfg.get('format','short'),
+              "map_style":cfg.get('map_style','satellite'),"map_config":self.config.get('map_config',{})}
+        (OUT/'render_spec.json').write_text(json.dumps(spec,indent=2,ensure_ascii=False))
+        (OUT/'config_final.json').write_text(json.dumps(cfg,indent=2))
+        resp=json.dumps({"ok":True,"path":str(OUT/'render_spec.json')}).encode()
+        self.send_response(200);self.send_header('Content-Type','application/json');self.end_headers();self.wfile.write(resp)
+        threading.Timer(1.5,lambda:os._exit(0)).start()
 
-def main():
-    global _timing, _config, _segments
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--port",type=int,default=8080)
-    args = parser.parse_args()
+def main(port=8080):
+    tp=IN/'timing.json';cp=IN/'config.json'
+    if not tp.exists():sys.exit(f"[CALIBAN] Manque {tp}")
+    t=json.loads(tp.read_text());c=json.loads(cp.read_text()) if cp.exists() else {}
+    Handler.timing=t;Handler.config=c;Handler.segs=build_segs(t)
+    print(f"[CALIBAN] {len(Handler.segs)} segments | http://localhost:{port}")
+    HTTPServer(('0.0.0.0',port),Handler).serve_forever()
 
-    for p in [os.path.join(F01OUT,"timing.json"), os.path.join(F02IN,"timing.json")]:
-        if os.path.exists(p):
-            with open(p) as f: _timing = json.load(f)
-            print(f"[CALIBAN] timing: {p}"); break
-    for p in [os.path.join(F01OUT,"config.json"), os.path.join(F02IN,"config.json")]:
-        if os.path.exists(p):
-            with open(p) as f: _config = json.load(f)
-            print(f"[CALIBAN] config: {p}"); break
-    if _timing is None:
-        print("[CALIBAN] ERREUR: timing.json introuvable"); sys.exit(1)
-    _config = _config or {}
-    _segments = build_segments(_timing, _config)
-    print(f"[CALIBAN] {len(_segments)} segments | preview → http://localhost:{args.port}")
-
-    srv = http.server.HTTPServer(("0.0.0.0", args.port), H)
-    def serve():
-        while not _shutdown.is_set(): srv.handle_request()
-    threading.Thread(target=serve, daemon=True).start()
-    _shutdown.wait()
-    print("[CALIBAN] Fermé.")
-
-if __name__ == "__main__":
-    main()
+if __name__=='__main__':
+    main(int(sys.argv[1]) if len(sys.argv)>1 else 8080)
