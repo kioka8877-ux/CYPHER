@@ -1,221 +1,240 @@
 #!/usr/bin/env python3
-"""F02 CALIBAN v4 — Preview visuel interactif CYPHER"""
-import json, os, sys, threading
+"""F02 CALIBAN v5 — Preview visuel Gate 2 CYPHER"""
+
+import json, sys, threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from urllib.parse import urlparse
 
-BASE = Path(__file__).parent.parent
-IN   = BASE / "IN"
-OUT  = BASE / "OUT"
-OUT.mkdir(exist_ok=True)
+BASE = Path(__file__).resolve().parent.parent
+ROOT = BASE.parent
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
+SAVED = threading.Event()
 
-COUNTRY_COORDS = {
-    "united states":{"lat":38,"lon":-97,"zoom":4,"iso":"US","flag":"🇺🇸"},
-    "usa":{"lat":38,"lon":-97,"zoom":4,"iso":"US","flag":"🇺🇸"},
-    "germany":{"lat":51.2,"lon":10.5,"zoom":5,"iso":"DE","flag":"🇩🇪"},
-    "japan":{"lat":36.2,"lon":138.3,"zoom":5,"iso":"JP","flag":"🇯🇵"},
-    "south korea":{"lat":35.9,"lon":127.8,"zoom":6,"iso":"KR","flag":"🇰🇷"},
-    "korea":{"lat":35.9,"lon":127.8,"zoom":6,"iso":"KR","flag":"🇰🇷"},
-    "france":{"lat":46.2,"lon":2.2,"zoom":5,"iso":"FR","flag":"🇫🇷"},
-    "italy":{"lat":41.9,"lon":12.6,"zoom":5,"iso":"IT","flag":"🇮🇹"},
-    "sweden":{"lat":60.1,"lon":18.6,"zoom":5,"iso":"SE","flag":"🇸🇪"},
-    "china":{"lat":35.9,"lon":104.2,"zoom":4,"iso":"CN","flag":"🇨🇳"},
-    "canada":{"lat":56.1,"lon":-106.3,"zoom":4,"iso":"CA","flag":"🇨🇦"},
-    "united kingdom":{"lat":55.4,"lon":-3.4,"zoom":5,"iso":"GB","flag":"🇬🇧"},
-    "uk":{"lat":55.4,"lon":-3.4,"zoom":5,"iso":"GB","flag":"🇬🇧"},
-    "united arab emirates":{"lat":23.4,"lon":53.8,"zoom":6,"iso":"AE","flag":"🇦🇪"},
-    "uae":{"lat":23.4,"lon":53.8,"zoom":6,"iso":"AE","flag":"🇦🇪"},
-    "taiwan":{"lat":23.7,"lon":121.0,"zoom":7,"iso":"TW","flag":"🇹🇼"},
-    "switzerland":{"lat":46.8,"lon":8.2,"zoom":7,"iso":"CH","flag":"🇨🇭"},
-    "netherlands":{"lat":52.1,"lon":5.3,"zoom":7,"iso":"NL","flag":"🇳🇱"},
-    "spain":{"lat":40.4,"lon":-3.7,"zoom":5,"iso":"ES","flag":"🇪🇸"},
-    "india":{"lat":20.6,"lon":78.9,"zoom":4,"iso":"IN","flag":"🇮🇳"},
-    "australia":{"lat":-25.3,"lon":133.8,"zoom":4,"iso":"AU","flag":"🇦🇺"},
-    "singapore":{"lat":1.3,"lon":103.8,"zoom":10,"iso":"SG","flag":"🇸🇬"},
-    "finland":{"lat":61.9,"lon":25.7,"zoom":5,"iso":"FI","flag":"🇫🇮"},
-    "denmark":{"lat":56.3,"lon":9.5,"zoom":6,"iso":"DK","flag":"🇩🇰"},
-    "brazil":{"lat":-14.2,"lon":-51.9,"zoom":4,"iso":"BR","flag":"🇧🇷"},
-}
-BRAND_DOMAINS = {
-    "apple":"apple.com","nike":"nike.com","coca-cola":"coca-cola.com",
-    "mcdonald's":"mcdonalds.com","tesla":"tesla.com","bmw":"bmw.com",
-    "mercedes-benz":"mercedes-benz.com","mercedes":"mercedes-benz.com",
-    "adidas":"adidas.com","toyota":"toyota.com","sony":"sony.com",
-    "nintendo":"nintendo.com","samsung":"samsung.com","hyundai":"hyundai.com",
-    "lg":"lg.com","airbus":"airbus.com","louis vuitton":"louisvuitton.com",
-    "ferrari":"ferrari.com","gucci":"gucci.com","lamborghini":"lamborghini.com",
-    "ikea":"ikea.com","volvo":"volvo.com","spotify":"spotify.com",
-    "tiktok":"tiktok.com","huawei":"huawei.com","dji":"dji.com",
-    "shopify":"shopify.com","bombardier":"bombardier.com",
-    "rolls-royce":"rolls-royce.com","burberry":"burberry.com",
-    "british airways":"britishairways.com","emirates":"emirates.com",
-    "tsmc":"tsmc.com","acer":"acer.com","nestle":"nestle.com",
-    "rolex":"rolex.com","ubs":"ubs.com","philips":"philips.com",
-    "heineken":"heineken.com","asml":"asml.com","zara":"zara.com",
-    "santander":"santander.com","reliance":"relianceindustries.com",
-    "qantas":"qantas.com","atlassian":"atlassian.com","canva":"canva.com",
-    "grab":"grab.com","singapore airlines":"singaporeair.com",
-    "nokia":"nokia.com","kone":"kone.com","lego":"lego.com",
-    "maersk":"maersk.com","embraer":"embraer.com",
-}
+def find(names):
+    for n in names:
+        for d in [BASE/"IN", ROOT/"F01_LION/OUT"]:
+            p = d/n
+            if p.exists(): return p
+    return None
 
-def extract(text):
-    t=text.lower()
-    countries=[{"name":n.title(),**d} for n,d in COUNTRY_COORDS.items() if n in t]
-    brands=[{"name":b.title(),"domain":dm,"logo":f"https://logo.clearbit.com/{dm}"}
-            for b,dm in BRAND_DOMAINS.items() if b in t]
-    return countries,brands
+lp = find(["lion_output.json"])
+cp = find(["config.json"])
+if not lp or not cp:
+    print("[CALIBAN] lion_output.json / config.json introuvables"); sys.exit(1)
 
-def build_segs(timing):
-    out=[]
-    for i,s in enumerate(timing.get("segments",[])):
-        text=s.get("text","")
-        countries,brands=extract(text)
-        primary=countries[0] if countries else {"lat":20,"lon":0,"zoom":2,"iso":"XX","flag":"🌍","name":"World"}
-        out.append({"id":i,"start":s.get("start",0),"end":s.get("end",0),"text":text.strip(),
-                    "countries":countries,"brands":brands,"primary":primary,"sfx":False,"visual_override":None})
-    return out
+LION   = json.loads(lp.read_text())
+CFG    = json.loads(cp.read_text())
+EVENTS = LION.get("spatial_events", [])
+FMT    = CFG.get("format", "short")
+DISP   = CFG.get("display", {})
+EJ     = json.dumps(EVENTS, ensure_ascii=False)
+CJ     = json.dumps(CFG,    ensure_ascii=False)
 
-HTML=r"""<!DOCTYPE html><html><head><meta charset="UTF-8"><title>CYPHER Gate 2</title>
+HTML = ("""<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>CYPHER F02 CALIBAN — Gate 2</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#050B08;color:#e8e4d0;font-family:'Segoe UI',sans-serif;display:flex;height:100vh;overflow:hidden}
-#sb{width:290px;flex-shrink:0;background:#08120a;border-right:1px solid #162018;display:flex;flex-direction:column}
-#ctrl{padding:10px;border-bottom:1px solid #162018}
-#ctrl h3{color:#b30006;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px}
-.cr{display:flex;align-items:center;gap:5px;margin-bottom:5px;font-size:11px}
-.cr label{width:80px;color:#556;flex-shrink:0}
-.cr select,.cr input{flex:1;background:#0d1e10;border:1px solid #1c2e1e;color:#e8e4d0;padding:3px 5px;border-radius:2px;font-size:11px}
-.cr input[type=range]{padding:0}
-.cr span{font-size:10px;color:#667;width:32px}
-#vbtn{width:100%;padding:10px;background:#b30006;color:#fff;border:none;cursor:pointer;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:bold;margin-top:7px}
-#vbtn:hover{background:#d40008}
-#slist{flex:1;overflow-y:auto}
-.si{padding:7px 11px;border-bottom:1px solid #0d1a0e;cursor:pointer}
-.si:hover,.si.active{background:#0d2014}
-.si.active{border-left:3px solid #b30006}
-.st{font-size:10px;color:#334}
-.sx{font-size:11px;color:#889;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
-.sf{font-size:12px;margin-top:2px}
-.sfb{padding:2px 6px;font-size:10px;border:1px solid #1c2e1e;background:transparent;color:#445;cursor:pointer;border-radius:2px;margin-top:3px}
-.sfb.on{border-color:#b30006;color:#b30006}
-#main{flex:1;display:flex;flex-direction:column}
-#map{flex:1}
-#fr{height:105px;background:#050B08;border-top:1px solid #162018;display:flex;align-items:center;gap:10px;padding:8px 13px}
-#lg{display:flex;gap:5px;align-items:center;flex-wrap:wrap;min-width:90px}
-#lg img{height:30px;background:#fff;border-radius:3px;padding:2px}
-#sw{flex:1;height:85px;display:flex;align-items:flex-end;justify-content:center;padding-bottom:5px}
-#st{font-size:16px;color:#fff;text-shadow:0 2px 5px #000;padding:3px 8px;background:rgba(0,0,0,.5);border-radius:3px}
-#inf{font-size:10px;color:#334;white-space:nowrap}
-#fb{background:#b30006;color:#fff;padding:1px 6px;border-radius:2px;font-size:10px;margin-left:5px}
-</style></head><body>
-<div id="sb">
+body{background:#050B08;color:#e0e0e0;font-family:'Cinzel',serif;display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{background:#0a1a12;border-bottom:1px solid #1a3a22;padding:7px 16px;font-size:12px;color:#4a9a6a;letter-spacing:2px;flex-shrink:0}
+main{display:flex;flex:1;overflow:hidden}
+#left{width:270px;flex-shrink:0;background:#061009;border-right:1px solid #1a3a22;display:flex;flex-direction:column;overflow:hidden}
+#seg-list{flex:1;overflow-y:auto;padding:6px}
+.si{padding:7px 9px;border:1px solid #1a3a22;border-radius:4px;margin-bottom:5px;cursor:pointer;transition:.15s;font-size:11px}
+.si:hover,.si.act{background:#0f2a18;border-color:#4a9a6a;color:#fff}
+.st{color:#4a9a6a;font-size:10px;font-family:monospace}
+.siso{color:#dc143c;font-weight:bold;font-size:10px}
+#ctrl{padding:8px 10px;border-top:1px solid #1a3a22;background:#050B08;font-size:11px}
+.cr{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+.cr label{width:88px;color:#6a9a7a;font-size:10px;flex-shrink:0}
+.cr select,.cr input[type=text]{flex:1;background:#0f2a18;border:1px solid #2a5a3a;color:#e0e0e0;padding:3px 5px;border-radius:3px;font-size:11px}
+.cr input[type=range]{flex:1;accent-color:#4a9a6a}
+.cr input[type=color]{width:34px;height:22px;border:none;background:none;cursor:pointer;padding:0}
+.vv{width:26px;text-align:right;font-size:10px;color:#4a9a6a}
+#sfx{border-top:1px solid #1a3a22;padding:6px 10px;max-height:120px;overflow-y:auto}
+#sfx h4{color:#dc143c;margin-bottom:4px;font-size:10px;letter-spacing:1px}
+.sfxr{display:flex;align-items:center;gap:5px;margin-bottom:2px}
+.sfxr span{flex:1;font-size:10px;color:#8a9a8a;font-family:monospace}
+.sfxb{padding:1px 7px;border-radius:3px;border:1px solid #2a5a3a;background:#0f2a18;color:#e0e0e0;cursor:pointer;font-size:10px}
+.sfxb.on{background:#dc143c;border-color:#dc143c;color:#fff}
+#vbtn{margin:8px 10px;padding:9px;background:#dc143c;color:#fff;border:none;border-radius:4px;font-family:'Cinzel',serif;font-size:12px;letter-spacing:2px;cursor:pointer;text-transform:uppercase}
+#vbtn:hover{background:#b00010}
+#right{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#030805;padding:12px;overflow:hidden;gap:8px}
+#fw{position:relative;background:#000;box-shadow:0 0 40px rgba(220,20,60,.3);overflow:hidden}
+#map{position:absolute;top:0;left:0;width:100%;height:100%}
+#sov{position:absolute;left:0;right:0;display:flex;justify-content:center;pointer-events:none;z-index:1000}
+#stxt{display:inline-block;text-align:center;text-shadow:2px 2px 4px #000;background:rgba(0,0,0,.4);padding:4px 10px;border-radius:4px;max-width:90%}
+#fi{position:absolute;top:7px;right:7px;background:rgba(0,0,0,.75);color:#4a9a6a;font-size:9px;padding:2px 7px;border-radius:3px;z-index:1000;font-family:monospace}
+#si{position:absolute;top:7px;left:7px;background:rgba(220,20,60,.85);color:#fff;font-size:9px;padding:2px 7px;border-radius:3px;z-index:1000;font-family:monospace}
+#fb{color:#4a9a6a;font-size:10px;letter-spacing:2px;font-family:monospace}
+.leaflet-container{background:#000!important}
+</style>
+</head>
+<body>
+<header>&#9670; CYPHER — F02 CALIBAN — Preview Gate 2 &#9670;</header>
+<main>
+<div id="left">
+  <div id="seg-list"></div>
   <div id="ctrl">
-    <h3>Imperivm <span id="fb">SHORT</span></h3>
     <div class="cr"><label>Format</label>
-      <select id="cf" onchange="document.getElementById('fb').textContent=this.value.toUpperCase()">
-        <option value="short">Short 9:16</option><option value="long">Long 16:9</option></select></div>
+      <select id="cf"><option value="short">short (9:16)</option><option value="long">long (16:9)</option></select></div>
+    <div class="cr"><label>Fond carte</label>
+      <select id="cm"><option value="sat">Satellite ESRI</option><option value="ter">Terrain ESRI</option><option value="cdb">CartoDB Dark</option><option value="osm">OSM</option></select></div>
     <div class="cr"><label>Police</label>
-      <select id="cfont" onchange="us()">
-        <option value="Cinzel">Cinzel</option><option value="Arial Black">Arrila Black</option>
-        <option value="Times New Roman">Times New Roman</option><option value="Georgia">Georgia</option></select></div>
-    <div class="cr"><label>Couleur</label><input type="color" id="ccol" value="#ffffff" oninput="us()"></div>
-    <div class="cr"><label>Taille</label><input type="range" id="csz" min="14" max="68" value="52" oninput="document.getElementById('szv').textContent=this.value+'px';us()"><span id="szv">52px</span></div>
+      <select id="cfo"><option>Cinzel</option><option>Arial Black</option><option>Georgia</option><option>Impact</option><option>Times New Roman</option></select></div>
+    <div class="cr"><label>Couleur</label><input type="color" id="cc" value="#ffffff"></div>
+    <div class="cr"><label>Taille</label><input type="range" id="cs" min="18" max="72" value="52"><span class="vv" id="csv">52</span></div>
     <div class="cr"><label>Position</label>
-      <select id="cpos" onchange="up()"><option value="bottom">Bas</option><option value="center">Centre</option><option value="top">Haut</option></select></div>
+      <select id="cp"><option value="bottom">Bas</option><option value="center">Centre</option><option value="top">Haut</option></select></div>
     <div class="cr"><label>Animation</label>
-      <select id="canim"><option value="ltr">Gauche→Droite</option><option value="fade">Fondu</option><option value="none">Aucune</option></select></div>
-    <div class="cr"><label>Scale</label><input type="range" id="csc" min="30" max="150" value="85" oninput="document.getElementById('scv').textContent=this.value+'%'"><span id="scv">85%</span></div>
-    <div class="cr"><label>Carte</label>
-      <select id="cmap" onchange="setT(this.value)">
-        <option value="satellite">Satellite ESRI</option><option value="dark">Dark</option><option value="terrain">Terrain</option></select></div>
-    <button id="vbtn" onclick="save()">✓ VALIDER GATE 2</button>
+      <select id="ca"><option value="ltr">G → D</option><option value="none">Aucune</option><option value="fade">Fondu</option></select></div>
+    <div class="cr"><label>Scale vis.</label><input type="range" id="csc" min="40" max="120" value="85"><span class="vv" id="cscv">0.85</span></div>
   </div>
-  <div id="slist"></div>
+  <div id="sfx"><h4>&#9836; SFX</h4><div id="sfxl"></div></div>
+  <button id="vbtn" onclick="doValidate()">&#9654; VALIDER GATE 2</button>
 </div>
-<div id="main"><div id="map"></div>
-  <div id="fr">
-    <div id="lg"></div>
-    <div id="sw"><div id="st">Sous-titre preview</div></div>
-    <div id="inf">SEG 0</div>
+<div id="right">
+  <div id="fw">
+    <div id="map"></div>
+    <div id="si">SEG 0</div>
+    <div id="fi">9:16 | satellite</div>
+    <div id="sov"><span id="stxt">—</span></div>
   </div>
+  <div id="fb">&#9670; 9:16 SHORT</div>
 </div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+</main>
 <script>
-const S=__SEGS__;const C=__CFG__;let cur=0,tl,hl;
-const map=L.map('map',{zoomControl:true,attributionControl:false});
-function setT(s){if(tl)map.removeLayer(tl);
-  const m={satellite:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    dark:'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    terrain:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'};
-  tl=L.tileLayer(m[s]).addTo(map);}
-setT('satellite');
-function show(i){cur=i;const s=S[i],p=s.primary;
-  map.flyTo([p.lat,p.lon],p.zoom,{duration:1});
-  if(hl)map.removeLayer(hl);
-  hl=L.circle([p.lat,p.lon],{radius:Math.max(40000,600000/Math.pow(2,p.zoom-3)),
-    color:'#fff',weight:3,fillColor:'#b30006',fillOpacity:.25}).addTo(map);
-  document.getElementById('lg').innerHTML=s.brands.slice(0,5).map(b=>
-    `<img src="${b.logo}" title="${b.name}" onerror="this.style.display='none'">`).join('');
-  document.getElementById('st').textContent=s.text.length>70?s.text.slice(0,70)+'…':s.text;
-  document.getElementById('inf').textContent=`SEG ${i} | ${s.start.toFixed(1)}→${s.end.toFixed(1)}s`;
-  us();document.querySelectorAll('.si').forEach((el,j)=>el.classList.toggle('active',j===i));}
-function us(){const el=document.getElementById('st');
-  el.style.fontFamily=document.getElementById('cfont').value;
-  el.style.color=document.getElementById('ccol').value;
-  el.style.fontSize=document.getElementById('csz').value+'px';}
-function up(){const p=document.getElementById('cpos').value,w=document.getElementById('sw');
-  w.style.alignItems=p==='top'?'flex-start':p==='center'?'center':'flex-end';}
-const sl=document.getElementById('slist');
-S.forEach((s,i)=>{const d=document.createElement('div');d.className='si'+(i===0?' active':'');
-  d.innerHTML=`<div class="st">${s.start.toFixed(1)}–${s.end.toFixed(1)}s</div>
-    <div class="sx">${s.text.slice(0,55)}</div><div class="sf">${s.countries.map(c=>c.flag||'').join(' ')}</div>
-    <button class="sfb ${s.sfx?'on':''}" onclick="tsf(event,${i})">${s.sfx?'SFX ●':'SFX ○'}</button>`;
-  d.addEventListener('click',e=>{if(e.target.classList.contains('sfb'))return;show(i);});sl.appendChild(d);});
-function tsf(e,i){e.stopPropagation();S[i].sfx=!S[i].sfx;const b=e.target;
-  b.className='sfb'+(S[i].sfx?' on':'');b.textContent=S[i].sfx?'SFX ●':'SFX ○';}
-function save(){
-  const cfg={format:document.getElementById('cf').value,map_style:document.getElementById('cmap').value,
-    display:{font:document.getElementById('cfont').value,font_color:document.getElementById('ccol').value,
-      font_size:parseInt(document.getElementById('csz').value),position:document.getElementById('cpos').value,
-      animation:document.getElementById('canim').value,visual_scale:parseInt(document.getElementById('csc').value)/100}};
-  fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({segments:S,config:cfg})})
-  .then(r=>r.json()).then(d=>{const b=document.getElementById('vbtn');b.textContent='✓ VALIDÉ';b.style.background='#1a6e2a';});}
-show(0);
-</script></body></html>"""
+const EV="""
++ EJ
++ """;
+const CFG="""
++ CJ
++ """;
+const D=CFG.display||{};
+const ISO2N={AF:4,AL:8,DZ:12,AR:32,AM:51,AU:36,AT:40,AZ:31,BY:112,BE:56,BR:76,BG:100,CA:124,CL:152,CN:156,CO:170,HR:191,CU:192,CY:196,CZ:203,DK:208,EG:818,EE:233,ET:231,FI:246,FR:250,GE:268,DE:276,GH:288,GR:300,HU:348,IN:356,ID:360,IR:364,IQ:368,IE:372,IL:376,IT:380,JP:392,JO:400,KZ:398,KE:404,LB:422,LY:434,LT:440,MY:458,MX:484,MD:498,MN:496,MA:504,NL:528,NZ:554,NG:566,NO:578,PK:586,PL:616,PT:620,QA:634,RO:642,RU:643,SA:682,RS:688,SG:702,ZA:710,KR:410,ES:724,SD:729,SE:752,CH:756,SY:760,TW:158,TH:764,TN:788,TR:792,UA:804,AE:784,GB:826,US:840,UY:858,UZ:860,VE:862,VN:704,YE:887};
+let map,topo=null,hl=null,cur=0;const sfx={};
+const TL={sat:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}','Esri'],ter:['https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}','Esri'],cdb:['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png','CARTO'],osm:['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png','OSM']};
+function initMap(){map=L.map('map',{zoomControl:false,attributionControl:false});setTile('sat');map.setView([20,20],2);}
+function setTile(k){if(window._tl)map.removeLayer(window._tl);const[u]=TL[k]||TL.sat;window._tl=L.tileLayer(u,{subdomains:'abcd'}).addTo(map);}
+function sizeFrame(f){
+  const rw=document.getElementById('right');
+  const ah=rw.clientHeight-50,aw=rw.clientWidth-30;
+  let w,h;
+  if(f==='short'){h=ah;w=h*9/16;if(w>aw){w=aw;h=w*16/9;}}
+  else{w=aw;h=w*9/16;if(h>ah){h=ah;w=h*16/9;}}
+  const fw=document.getElementById('fw');
+  fw.style.width=Math.round(w)+'px';fw.style.height=Math.round(h)+'px';
+  document.getElementById('fb').textContent=f==='short'?'&#9670; 9:16 SHORT':'&#9670; 16:9 LONG';
+  document.getElementById('fi').textContent=(f==='short'?'9:16':'16:9')+' | '+document.getElementById('cm').value;
+  setTimeout(()=>{if(map)map.invalidateSize();},60);
+}
+function loadTopo(){fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json').then(r=>r.json()).then(t=>{topo=t;applyS(cur);}).catch(()=>{});}
+function hlISOs(hls){
+  if(hl){map.removeLayer(hl);hl=null;}
+  if(!hls||!hls.length)return;
+  if(topo){
+    const feats=topojson.feature(topo,topo.objects.countries).features;
+    const layers=[];
+    hls.forEach(h=>{const n=ISO2N[h.iso];if(!n)return;const f=feats.find(x=>+x.id===n);if(!f)return;
+      layers.push(L.geoJSON(f,{style:{fillColor:h.color||'#DC143C',fillOpacity:h.opacity||0.65,color:'#FFFFFF',weight:3,opacity:1}}));});
+    if(layers.length){hl=L.layerGroup(layers).addTo(map);}
+  } else {
+    const ev=EV[cur];if(!ev)return;
+    const g=ev.geo_focus||{};
+    hl=L.circle([g.lat||20,g.lon||20],{radius:500000,color:hls[0]?.color||'#DC143C',fillColor:hls[0]?.color||'#DC143C',fillOpacity:.4,weight:3}).addTo(map);
+  }
+}
+function applyS(i){
+  const ev=EV[i];if(!ev)return;
+  document.getElementById('si').textContent='SEG '+i;
+  const g=ev.geo_focus||{};if(map&&g.lat!=null)map.setView([g.lat,g.lon],g.zoom||5,{animate:true});
+  hlISOs(ev.highlights);
+  const ov=(ev.overlays||[]).find(o=>o.type==='text');
+  const txt=ov?ov.content:(ev.highlights||[]).map(h=>h.iso).join(' / ')||'—';
+  updateSub(txt);
+}
+function updateSub(t){
+  const el=document.getElementById('stxt'),ov=document.getElementById('sov');
+  el.style.fontSize=document.getElementById('cs').value+'px';
+  el.style.color=document.getElementById('cc').value;
+  el.style.fontFamily=document.getElementById('cfo').value+',serif';
+  el.textContent=t;
+  const pos=document.getElementById('cp').value;
+  ov.style.bottom=pos==='bottom'?'6%':pos==='top'?'auto':'45%';
+  ov.style.top=pos==='top'?'8%':'auto';
+}
+function buildSegs(){
+  const sl=document.getElementById('seg-list');sl.innerHTML='';
+  EV.forEach((ev,i)=>{
+    const isos=(ev.highlights||[]).map(h=>h.iso).join(',');
+    const d=document.createElement('div');d.className='si'+(i===0?' act':'');d.id='s'+i;
+    d.innerHTML=`<div class="st">${ev.t_start.toFixed(1)}s → ${ev.t_end.toFixed(1)}s</div><div class="siso">&#9670; ${isos||'—'}</div>`;
+    d.onclick=()=>selSeg(i);sl.appendChild(d);
+  });
+}
+function buildSfx(){
+  const sl=document.getElementById('sfxl');sl.innerHTML='';
+  EV.forEach((ev,i)=>{sfx[i]=false;const r=document.createElement('div');r.className='sfxr';
+    r.innerHTML=`<span>Seg ${i} (${ev.t_start.toFixed(1)}s)</span><button class="sfxb" id="sfxb${i}" onclick="toggleSfx(${i})">&#9675; OFF</button>`;
+    sl.appendChild(r);});
+}
+function toggleSfx(i){sfx[i]=!sfx[i];const b=document.getElementById('sfxb'+i);b.className='sfxb'+(sfx[i]?' on':'');b.innerHTML=sfx[i]?'&#9679; ON':'&#9675; OFF';}
+function selSeg(i){document.querySelectorAll('.si').forEach(e=>e.classList.remove('act'));document.getElementById('s'+i).classList.add('act');cur=i;applyS(i);}
+function wireCtrl(){
+  document.getElementById('cf').value=CFG.format||'short';
+  document.getElementById('cfo').value=D.font||'Cinzel';
+  document.getElementById('cc').value=D.font_color||'#ffffff';
+  document.getElementById('cs').value=D.font_size||52;
+  document.getElementById('csv').textContent=D.font_size||52;
+  document.getElementById('cp').value=D.position||'bottom';
+  document.getElementById('ca').value=D.animation||'ltr';
+  document.getElementById('csc').value=Math.round((D.visual_scale||0.85)*100);
+  document.getElementById('cscv').textContent=(D.visual_scale||0.85).toFixed(2);
+  document.getElementById('cf').onchange=()=>sizeFrame(document.getElementById('cf').value);
+  document.getElementById('cm').onchange=()=>{setTile(document.getElementById('cm').value);sizeFrame(document.getElementById('cf').value);};
+  document.getElementById('cs').oninput=()=>{document.getElementById('csv').textContent=document.getElementById('cs').value;applyS(cur);};
+  document.getElementById('cc').oninput=()=>applyS(cur);
+  document.getElementById('cfo').onchange=()=>applyS(cur);
+  document.getElementById('cp').onchange=()=>applyS(cur);
+  document.getElementById('csc').oninput=()=>{document.getElementById('cscv').textContent=(document.getElementById('csc').value/100).toFixed(2);};
+}
+function doValidate(){
+  const b={format:document.getElementById('cf').value,map_style:document.getElementById('cm').value,font:document.getElementById('cfo').value,font_color:document.getElementById('cc').value,font_size:+document.getElementById('cs').value,position:document.getElementById('cp').value,animation:document.getElementById('ca').value,visual_scale:+document.getElementById('csc').value/100,sfx_triggers:sfx};
+  fetch('/api/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(r=>r.json()).then(d=>{if(d.ok){const btn=document.getElementById('vbtn');btn.textContent='&#10003; GATE 2 VALIDÉ';btn.style.background='#1a5a2a';}});
+}
+window.onload=()=>{initMap();buildSegs();buildSfx();wireCtrl();sizeFrame(CFG.format||'short');loadTopo();setTimeout(()=>selSeg(0),350);};
+window.onresize=()=>sizeFrame(document.getElementById('cf').value);
+</script></body></html>""")
 
 class Handler(BaseHTTPRequestHandler):
-    segs=[];timing={};config={}
-    def log_message(self,*a):pass
+    def log_message(self,*a): pass
     def do_GET(self):
-        if urlparse(self.path).path=='/':
-            h=HTML.replace('__SEGS__',json.dumps(self.segs,ensure_ascii=False)).replace('__CFG__',json.dumps(self.config,ensure_ascii=False))
-            self.send_response(200);self.send_header('Content-Type','text/html;charset=utf-8');self.end_headers();self.wfile.write(h.encode())
-        else:self.send_response(404);self.end_headers()
+        if self.path in ('/','/index.html'):
+            body=HTML.encode('utf-8')
+            self.send_response(200);self.send_header('Content-Type','text/html;charset=utf-8');self.send_header('Content-Length',len(body));self.end_headers();self.wfile.write(body)
+        else:
+            self.send_response(404);self.end_headers()
     def do_POST(self):
-        data=json.loads(self.rfile.read(int(self.headers.get('Content-Length',0))))
-        segs=data.get('segments',[]);cfg=data.get('config',{})
-        spec={"run_id":self.config.get('run_id',''),"meta":self.timing.get('meta',{}),"words":self.timing.get('words',[]),
-              "segments":[{"id":s['id'],"start":s['start'],"end":s['end'],"text":s['text'],"countries":s.get('countries',[]),
-              "brands":s.get('brands',[]),"primary":s.get('primary',{}),"sfx_trigger":s.get('sfx',False),
-              "media_type":"image","visual_file":s.get('visual_override','')} for s in segs],
-              "display":cfg.get('display',{}),"format":cfg.get('format','short'),
-              "map_style":cfg.get('map_style','satellite'),"map_config":self.config.get('map_config',{})}
-        (OUT/'render_spec.json').write_text(json.dumps(spec,indent=2,ensure_ascii=False))
-        (OUT/'config_final.json').write_text(json.dumps(cfg,indent=2))
-        resp=json.dumps({"ok":True,"path":str(OUT/'render_spec.json')}).encode()
-        self.send_response(200);self.send_header('Content-Type','application/json');self.end_headers();self.wfile.write(resp)
-        threading.Timer(1.5,lambda:os._exit(0)).start()
+        if self.path=='/api/save':
+            n=int(self.headers.get('Content-Length',0))
+            body=json.loads(self.rfile.read(n))
+            spec={'meta':{'run_id':CFG.get('run_id',''),'format':body.get('format',FMT),'map_style':body.get('map_style','sat'),'total_segments':len(EVENTS)},'spatial_events':EVENTS,'display':{'font':body.get('font','Cinzel'),'font_color':body.get('font_color','#FFFFFF'),'font_size':int(body.get('font_size',52)),'position':body.get('position','bottom'),'animation':body.get('animation','ltr'),'visual_scale':float(body.get('visual_scale',0.85))},'sfx_triggers':body.get('sfx_triggers',{}),'visuals':CFG.get('visuals',{}),'map_config':CFG.get('map_config',{})}
+            out=BASE/'OUT'/'render_spec.json';out.parent.mkdir(parents=True,exist_ok=True);out.write_text(json.dumps(spec,indent=2,ensure_ascii=False))
+            resp=json.dumps({'ok':True}).encode()
+            self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',len(resp));self.end_headers();self.wfile.write(resp)
+            SAVED.set()
+        else:
+            self.send_response(404);self.end_headers()
 
-def main(port=8080):
-    tp=IN/'timing.json';cp=IN/'config.json'
-    if not tp.exists():sys.exit(f"[CALIBAN] Manque {tp}")
-    t=json.loads(tp.read_text());c=json.loads(cp.read_text()) if cp.exists() else {}
-    Handler.timing=t;Handler.config=c;Handler.segs=build_segs(t)
-    print(f"[CALIBAN] {len(Handler.segs)} segments | http://localhost:{port}")
-    HTTPServer(('0.0.0.0',port),Handler).serve_forever()
+def run():
+    srv=HTTPServer(('0.0.0.0',PORT),Handler)
+    print(f'[CALIBAN] http://localhost:{PORT}',flush=True)
+    t=threading.Thread(target=srv.serve_forever,daemon=True);t.start()
+    SAVED.wait();print('[CALIBAN] render_spec.json OK',flush=True);srv.shutdown()
 
-if __name__=='__main__':
-    main(int(sys.argv[1]) if len(sys.argv)>1 else 8080)
+if __name__=='__main__':run()
