@@ -79,11 +79,23 @@ jobs:
             --fps 30 \
             --media_dir ./media \
             --disable_caching \
-            -q h
-          RENDERED=$(find ./media -name "*.mp4" | grep -v partial_movie_files | head -1)
-          if [ -z "$RENDERED" ]; then RENDERED=$(find ./media -name "*.mp4" | head -1); fi
+            -q h || true
+          echo "[DEATHWING] Fichiers MP4 après render :"
+          find ./media -name "*.mp4" -ls 2>/dev/null || echo "Aucun MP4"
+          # 1. Cherche le fichier final (hors partial)
+          RENDERED=$(find ./media -name "*.mp4" 2>/dev/null | grep -v partial_movie_files | head -1)
+          # 2. Fallback : concatène les partiels via FFmpeg
+          if [ -z "$RENDERED" ]; then
+            PARTIALS=$(find ./media -name "*.mp4" 2>/dev/null | sort)
+            if [ -n "$PARTIALS" ]; then
+              echo "$PARTIALS" | while read f; do echo "file \'$f\'"; done > /tmp/concat_list.txt
+              ffmpeg -f concat -safe 0 -i /tmp/concat_list.txt -c copy ./media/cypher_final.mp4 -y
+              RENDERED=./media/cypher_final.mp4
+              echo "[DEATHWING] Partiels concaténés → $RENDERED"
+            fi
+          fi
           echo "RENDERED=$RENDERED" >> $GITHUB_ENV
-          echo "[DEATHWING] Rendu : $RENDERED"
+          echo "[DEATHWING] RENDERED=$RENDERED"
 
       - name: Upload video artifact
         uses: actions/upload-artifact@v4
