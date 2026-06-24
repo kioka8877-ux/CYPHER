@@ -42,24 +42,24 @@ jobs:
         run: |
           mkdir -p render_workspace/visuals
           # Télécharger render_spec.json
-          gh release download "cyp-${{ inputs.run_id }}" \
+          gh release download "${{ inputs.run_id }}" \
             --repo ${{ github.repository }} \
             --pattern "render_spec.json" \
             --dir render_workspace
           # Télécharger les visuels (PNG/JPG/GIF/MP4) s'ils existent
-          gh release download "cyp-${{ inputs.run_id }}" \
+          gh release download "${{ inputs.run_id }}" \
             --repo ${{ github.repository }} \
             --pattern "*.png" \
             --dir render_workspace/visuals || true
-          gh release download "cyp-${{ inputs.run_id }}" \
+          gh release download "${{ inputs.run_id }}" \
             --repo ${{ github.repository }} \
             --pattern "*.jpg" \
             --dir render_workspace/visuals || true
-          gh release download "cyp-${{ inputs.run_id }}" \
+          gh release download "${{ inputs.run_id }}" \
             --repo ${{ github.repository }} \
             --pattern "*.gif" \
             --dir render_workspace/visuals || true
-          gh release download "cyp-${{ inputs.run_id }}" \
+          gh release download "${{ inputs.run_id }}" \
             --repo ${{ github.repository }} \
             --pattern "*.mp4" \
             --dir render_workspace/visuals || true
@@ -95,7 +95,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-          gh release upload "cyp-${{ inputs.run_id }}" \
+          gh release upload "${{ inputs.run_id }}" \
             "${{ env.RENDERED }}" \
             --repo ${{ github.repository }} \
             --clobber
