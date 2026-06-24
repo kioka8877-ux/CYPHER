@@ -52,17 +52,28 @@ BRAND_DOMAINS = {
     "lego": "lego.com", "maersk": "maersk.com", "embraer": "embraer.com",
 }
 
-def parse_segment(seg):
+def parse_segment(seg, words=None):
     text = seg["text"].lower()
     country = iso = None; lat = lon = 0.0; zoom = 4
     for name, (c, la, lo, z) in COUNTRY_MAP.items():
         if name in text:
             country, iso, lat, lon, zoom = name, c, la, lo, z; break
+    fps = 30
     brands = []
     for brand, domain in BRAND_DOMAINS.items():
         if brand in text:
+            # Find word_frame: first word in words list that matches brand name
+            word_frame = seg.get("start_frame", int(seg["start"] * fps))
+            if words:
+                brand_words = brand.split()
+                for w in words:
+                    if w.get("word", "").lower().strip(".,!?") == brand_words[0]:
+                        if w["start"] >= seg["start"] - 0.1 and w["start"] <= seg["end"] + 0.1:
+                            word_frame = int(w["start"] * fps)
+                            break
             brands.append({"name": brand, "domain": domain,
-                           "logo": f"https://logo.clearbit.com/{domain}?size=80"})
+                           "logo": f"https://logo.clearbit.com/{domain}?size=80",
+                           "word_frame": word_frame})
     return {"id": seg["id"], "text": seg["text"], "start": seg["start"], "end": seg["end"],
             "start_frame": seg.get("start_frame", 0), "end_frame": seg.get("end_frame", 0),
             "country": country or "unknown", "iso": iso or "", "lat": lat, "lon": lon,
@@ -77,7 +88,8 @@ TIMING = json.loads(tp.read_text())
 CFG = json.loads(cp.read_text()) if cp else {}
 META = TIMING.get("meta", {})
 FMT = CFG.get("format", "short")
-SEGS = [parse_segment(s) for s in TIMING.get("segments", [])]
+WORDS = TIMING.get("words", [])
+SEGS = [parse_segment(s, WORDS) for s in TIMING.get("segments", [])]
 EJ = json.dumps(SEGS, ensure_ascii=False)
 METAJ = json.dumps(META, ensure_ascii=False)
 TOTAL_FRAMES = META.get("total_frames", 1800)
@@ -281,25 +293,29 @@ function clearLogoMarkers(){{
   logoMarkers=[];
 }}
 
-function addLogoMarkers(seg){{
+function addLogoMarkers(seg, currentFrame){{
   clearLogoMarkers();
   if(!seg.lat && !seg.lon) return;
-  const brands=seg.brands||[];
-  const n=Math.min(brands.length,4);
-  const offsets=[[0,-0.8],[0.7,0.4],[-0.7,0.4],[0,1.6]];
-  const factor=Math.pow(2,4-Math.min(seg.zoom,6))*0.15;
-  brands.slice(0,n).forEach((b,i)=>{{
-    const [dlat,dlon]=(offsets[i]||[0,0]).map(x=>x*factor*800000/111000);
+  const brands=(seg.brands||[]).filter(b=> currentFrame===undefined || b.word_frame<=currentFrame);
+  const n=brands.length;
+  if(n===0) return;
+  const factor=Math.pow(2,4-Math.min(seg.zoom||4,6))*0.12;
+  const r=factor*800000/111000;
+  brands.forEach((b,i)=>{{
+    const angle=(n===1)?Math.PI/2:(i*2*Math.PI/n - Math.PI/2);
+    const dlat=r*Math.sin(angle);
+    const dlon=r*Math.cos(angle);
+    const initials=b.name.split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);
     const icon=L.divIcon({{
       className:'',
-      html:`<div style="background:#fff;border-radius:8px;padding:4px;width:52px;height:52px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.6);border:2px solid ${{getCountryColor()}}">
-        <img src="${{b.logo}}" style="max-width:44px;max-height:44px;object-fit:contain"
-          onerror="this.parentElement.innerHTML='<span style=font-size:9px;color:#333;text-align:center;word-break:break-all>'+${{JSON.stringify(b.name)}}+'</span>'">
+      html:`<div style="background:#fff;border-radius:8px;padding:3px;width:54px;height:54px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.7);border:2px solid ${{getCountryColor()}};transition:all .3s">
+        <img src="${{b.logo}}" style="max-width:46px;max-height:46px;object-fit:contain"
+          onerror="this.outerHTML='<div style=width:50px;height:50px;background:${{getCountryColor()}};border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:14px>${{initials}}</div>'">
       </div>`,
-      iconSize:[52,52], iconAnchor:[26,26]
+      iconSize:[54,54], iconAnchor:[27,27]
     }});
     const m=L.marker([seg.lat+dlat,seg.lon+dlon],{{icon,zIndexOffset:1000}}).addTo(map);
-    m.bindTooltip(b.name,{{direction:'top',offset:[0,-28]}});
+    m.bindTooltip(b.name,{{direction:'top',offset:[0,-30],permanent:false}});
     logoMarkers.push(m);
   }});
 }}
@@ -324,7 +340,7 @@ function loadSegment(idx){{
   const seg=SEGS[idx];
   if(seg.lat||seg.lon) map.setView([seg.lat,seg.lon],seg.zoom||5,{{animate:true,duration:.5}});
   refreshCountryHighlight();
-  addLogoMarkers(seg);
+  addLogoMarkers(seg, seg.end_frame||(Math.round(seg.end*30)));
   document.getElementById('subtitle-text').textContent=seg.text;
   applySubtitleStyle();
   const lbl=document.getElementById('country-label');
@@ -354,8 +370,13 @@ function scrubTimeline(val){{
     if(t>=SEGS[i].start && t<SEGS[i].end){{found=i;break;}}
     if(t>=SEGS[i].end && i===SEGS.length-1) found=i;
   }}
-  if(found!==curIdx) loadSegment(found);
-  else updateTimelineInfo(frame,curIdx);
+  if(found!==curIdx){{
+    loadSegment(found);
+    addLogoMarkers(SEGS[found], frame);
+  }} else {{
+    addLogoMarkers(SEGS[curIdx], frame);
+    updateTimelineInfo(frame,curIdx);
+  }}
 }}
 
 function buildList(){{
