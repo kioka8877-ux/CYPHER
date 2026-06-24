@@ -1,25 +1,13 @@
 #!/usr/bin/env python3
-"""
-CypherScene — Template Manim fixe.
-Lit render_spec.json dans le répertoire courant et forge la vidéo.
-"""
-import json
+"""CypherScene v2 — Template Manim. Lit render_spec.json, forge video 9:16."""
+import json, tempfile
 from pathlib import Path
 
 try:
     from manim import *
 except ImportError:
-    raise RuntimeError("manim non installé")
+    raise RuntimeError("manim non installe")
 
-try:
-    from atlas.primitives.geo import GeoScene as ATLASGeo
-    from atlas.primitives.overlay import TextOverlay
-    ATLAS_OK = True
-except Exception:
-    ATLAS_OK = False
-
-
-# ── helpers ──────────────────────────────────────────────────────────────────
 
 def load_spec() -> dict:
     for p in [Path("render_spec.json"), Path("../render_spec.json"),
@@ -29,120 +17,144 @@ def load_spec() -> dict:
     raise FileNotFoundError("render_spec.json introuvable")
 
 
-def safe_text(content: str, font_size: int, color: str, font: str) -> Text:
-    # Arrila Black n'est pas disponible dans l'image Docker → fallback Dejavu
-    safe_font = font if font not in ("Arrila Black", "MedievalSharp") else "DejaVu Sans"
+def generate_map(lat, lon, iso, country_color, out_path, w=1080, h=720):
     try:
-        return Text(content, font_size=font_size, color=color, font=safe_font)
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        import geopandas as gpd
+        world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+        fig, ax = plt.subplots(figsize=(w/100, h/100), dpi=100)
+        fig.patch.set_facecolor("#050B08")
+        ax.set_facecolor("#050B08")
+        world.plot(ax=ax, color="#1A2E25", edgecolor="#FFFFFF", linewidth=0.3)
+        if iso:
+            hi = world[world["iso_a3"] == iso.upper()]
+            if not hi.empty:
+                hi.plot(ax=ax, color=country_color, edgecolor="#FFFFFF", linewidth=1.5)
+                b = hi.total_bounds
+                cx, cy = (b[0]+b[2])/2, (b[1]+b[3])/2
+                sx = max((b[2]-b[0])*2.2, 60)
+                sy = max((b[3]-b[1])*2.2, 40)
+                ax.set_xlim(cx-sx/2, cx+sx/2)
+                ax.set_ylim(cy-sy/2, cy+sy/2)
+            else:
+                ax.set_xlim(lon-35, lon+35); ax.set_ylim(lat-25, lat+25)
+        else:
+            ax.set_xlim(-180, 180); ax.set_ylim(-90, 90)
+        ax.set_axis_off()
+        plt.tight_layout(pad=0)
+        plt.savefig(out_path, bbox_inches="tight", pad_inches=0, facecolor="#050B08", dpi=100)
+        plt.close(fig)
+        return Path(out_path).stat().st_size > 500
+    except Exception as e:
+        print(f"[MAP] {e}"); return False
+
+
+def dl_logo(url, path):
+    try:
+        import urllib.request
+        urllib.request.urlretrieve(url, path)
+        return Path(path).stat().st_size > 800
+    except Exception as e:
+        print(f"[LOGO] {e}"); return False
+
+
+def safe_text(txt, sz, col, font):
+    f = font if font not in ("Arrila Black", "MedievalSharp") else "DejaVu Sans"
+    try:
+        return Text(txt, font_size=sz, color=col, font=f)
     except Exception:
-        return Text(content, font_size=font_size, color=color)
+        return Text(txt, font_size=sz, color=col)
 
-
-def build_visual(seg: dict, visuals_dir: Path, frame_w: float, frame_h: float):
-    """Retourne un Mobject visuel pour le segment."""
-    vfile = seg.get("visual_file", "")
-    if vfile:
-        for d in [visuals_dir, Path("visuals"), Path(".")]:
-            p = d / vfile
-            if p.exists():
-                try:
-                    img = ImageMobject(str(p))
-                    img.scale_to_fit_width(frame_w * 0.85)
-                    if img.height > frame_h * 0.75:
-                        img.scale_to_fit_height(frame_h * 0.75)
-                    img.move_to(ORIGIN)
-                    return img
-                except Exception:
-                    pass
-
-    # Fallback : rectangle coloré avec coordonnées géo si disponibles
-    geo_focus = seg.get("geo_focus", {})
-    label = ""
-    if geo_focus:
-        lat = geo_focus.get("lat", 0)
-        lon = geo_focus.get("lon", 0)
-        label = f"{lat:.1f}°N {lon:.1f}°E"
-
-    rect = Rectangle(
-        width=frame_w * 0.85, height=frame_h * 0.6,
-        fill_color="#1A2E25", fill_opacity=0.8,
-        stroke_color="#B30006", stroke_width=2,
-    )
-    rect.move_to(ORIGIN)
-    if label:
-        coord_text = Text(label, font_size=20, color="#B30006")
-        coord_text.move_to(rect.get_center())
-        return VGroup(rect, coord_text)
-    return rect
-
-
-# ── scène principale ──────────────────────────────────────────────────────────
 
 class CypherScene(Scene):
     def construct(self):
-        spec       = load_spec()
-        meta       = spec.get("meta", {})
-        segments   = spec.get("segments", [])
-        display    = spec.get("display", {})
-        map_style  = spec.get("map_style", "dark")
+        spec      = load_spec()
+        meta      = spec.get("meta", {})
+        segments  = spec.get("segments", [])
+        display   = spec.get("display", {})
+        map_conf  = spec.get("map_config", {})
 
-        # Config display
-        font       = display.get("font", "DejaVu Sans")
-        fcolor     = display.get("font_color", "#FFFFFF")
-        fsize      = int(display.get("font_size", 42))
-        position   = display.get("position", "bottom")
-        anim_type  = display.get("animation", "fade")
-        anim_spd   = float(display.get("animation_speed", 0.35))
+        font    = display.get("font", "DejaVu Sans")
+        fcolor  = display.get("font_color", "#FFFFFF")
+        fsize   = int(display.get("font_size", 38))
+        pos     = display.get("position", "bottom")
+        spd     = 0.3
 
-        fps         = int(meta.get("fps", 30))
-        fw          = config.frame_width
-        fh          = config.frame_height
+        cfill   = map_conf.get("country_fill", "#B30006")
+        fps     = int(meta.get("fps", 30))
+        fw      = config.frame_width
+        fh      = config.frame_height
+        sub_y   = -fh * 0.38 if pos == "bottom" else 0.0
 
-        self.camera.background_color = "#050B08" if map_style == "dark" else "#1a1a2e"
-
-        visuals_dir = Path("visuals")
-        sub_y = -fh * 0.38 if position == "bottom" else 0.0
+        self.camera.background_color = "#050B08"
+        tmp = Path(tempfile.mkdtemp())
 
         for i, seg in enumerate(segments):
             start_f = seg.get("start_frame", i * 90)
-            end_f   = seg.get("end_frame", (i + 1) * 90)
-            hold    = max((end_f - start_f) / fps - anim_spd * 2, 0.05)
+            end_f   = seg.get("end_frame", (i+1) * 90)
+            hold    = max((end_f - start_f) / fps - spd * 2, 0.15)
             text    = seg.get("text", "")
+            lat     = float(seg.get("lat", 0))
+            lon     = float(seg.get("lon", 0))
+            iso     = seg.get("iso", "")
+            brands  = seg.get("brands", [])
 
-            visual  = build_visual(seg, visuals_dir, fw, fh)
+            # ── carte ──
+            mp = str(tmp / f"map_{i:02d}.png")
+            if generate_map(lat, lon, iso, cfill, mp):
+                map_mob = ImageMobject(mp)
+                map_mob.scale_to_fit_width(fw * 0.92)
+                if map_mob.height > fh * 0.62:
+                    map_mob.scale_to_fit_height(fh * 0.62)
+            else:
+                map_mob = Rectangle(
+                    width=fw*0.9, height=fh*0.5,
+                    fill_color="#1A2E25", fill_opacity=0.9,
+                    stroke_color=cfill, stroke_width=2)
+            map_mob.move_to(UP * fh * 0.1)
 
-            # Subtitle
+            # ── logo ──
+            logo_mob = None
+            if brands:
+                lp = str(tmp / f"logo_{i:02d}.png")
+                lurl = brands[0].get("logo", "")
+                if lurl and dl_logo(lurl, lp):
+                    try:
+                        li = ImageMobject(lp)
+                        li.scale_to_fit_height(fh * 0.10)
+                        bg = RoundedRectangle(
+                            corner_radius=0.12,
+                            width=li.width + 0.35, height=li.height + 0.25,
+                            fill_color="#FFFFFF", fill_opacity=1.0, stroke_width=0)
+                        bg.move_to(UP * fh * 0.34)
+                        li.move_to(bg.get_center())
+                        logo_mob = VGroup(bg, li)
+                    except Exception:
+                        logo_mob = None
+                if logo_mob is None:
+                    bname = brands[0].get("name", "").upper()[:12]
+                    bb = RoundedRectangle(corner_radius=0.12, width=3.8, height=0.75,
+                                         fill_color="#FFFFFF", fill_opacity=1.0, stroke_width=0)
+                    bb.move_to(UP * fh * 0.34)
+                    bt = Text(bname, font_size=20, color="#050B08")
+                    bt.move_to(bb.get_center())
+                    logo_mob = VGroup(bb, bt)
+
+            # ── sous-titre ──
             sub = safe_text(text, fsize, fcolor, font)
             sub.move_to([0, sub_y, 0])
-            # Wrap long lines
             if sub.width > fw * 0.9:
                 sub.scale(fw * 0.9 / sub.width)
 
-            # Animate in
-            if anim_type == "left":
-                sub.shift(LEFT * fw * 0.15)
-                sub.set_opacity(0)
-                self.play(
-                    FadeIn(visual, run_time=anim_spd),
-                    sub.animate.shift(RIGHT * fw * 0.15).set_opacity(1),
-                    run_time=anim_spd,
-                )
-            else:
-                self.play(
-                    FadeIn(visual, run_time=anim_spd),
-                    FadeIn(sub, run_time=anim_spd),
-                )
-
+            # ── in ──
+            ins = [FadeIn(map_mob, run_time=spd), FadeIn(sub, run_time=spd)]
+            if logo_mob: ins.append(FadeIn(logo_mob, run_time=spd))
+            self.play(*ins)
             self.wait(hold)
 
-            # Animate out — dernier segment : fondu propre
-            if i == len(segments) - 1:
-                self.play(
-                    FadeOut(visual, run_time=anim_spd),
-                    FadeOut(sub, run_time=anim_spd),
-                )
-            else:
-                self.play(
-                    FadeOut(visual, run_time=anim_spd * 0.7),
-                    FadeOut(sub, run_time=anim_spd * 0.7),
-                )
+            # ── out ──
+            outs = [FadeOut(map_mob, run_time=spd*0.7), FadeOut(sub, run_time=spd*0.7)]
+            if logo_mob: outs.append(FadeOut(logo_mob, run_time=spd*0.7))
+            self.play(*outs)
