@@ -80,7 +80,8 @@ jobs:
             --media_dir ./media \
             --disable_caching \
             -q h
-          RENDERED=$(find ./media -name "*.mp4" | head -1)
+          RENDERED=$(find ./media -name "*.mp4" | grep -v partial_movie_files | head -1)
+          if [ -z "$RENDERED" ]; then RENDERED=$(find ./media -name "*.mp4" | head -1); fi
           echo "RENDERED=$RENDERED" >> $GITHUB_ENV
           echo "[DEATHWING] Rendu : $RENDERED"
 
