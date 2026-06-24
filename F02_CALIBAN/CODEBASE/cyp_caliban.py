@@ -132,7 +132,7 @@ input[type=color]{{height:28px;cursor:pointer;padding:2px}}
 .val-hint{{font-size:9px;color:#666;margin-top:1px}}
 #btn-validate{{width:100%;background:#B30006;color:#fff;border:none;padding:9px;cursor:pointer;border-radius:4px;font-size:11px;letter-spacing:2px;margin-top:6px;text-transform:uppercase}}
 #btn-validate:hover{{background:#d40007}}
-#val-msg{{font-size:9px;color:#4a9a6a;margin-top:4px;text-align:center;min-height:14px}}
+#val-msg{{font-size:13px;font-weight:bold;color:#4aff8a;margin-top:8px;text-align:center;min-height:20px;background:#0a2a18;border:1px solid #4aff8a;border-radius:4px;padding:6px;display:none}}
 .seg-detail{{font-size:9px;color:#888;text-align:center;max-width:100%}}
 .leaflet-marker-icon{{transition:transform .2s}}
 </style>
@@ -407,8 +407,16 @@ function validate(){{
   }};
   fetch('/api/save',{{method:'POST',headers:{{'Content-Type':'application/json'}},body:JSON.stringify(payload)}})
     .then(r=>r.json()).then(d=>{{
-      document.getElementById('val-msg').textContent=d.ok?'render_spec.json ✓ Gate 3 prête':'Erreur: '+d.error;
-    }}).catch(e=>document.getElementById('val-msg').textContent='OK — serveur arrêté');
+      var el=document.getElementById('val-msg');
+      el.style.display='block';
+      el.textContent=d.ok?'✓ render_spec.json généré — Gate 3 débloquée':'Erreur: '+d.error;
+      if(d.ok){{el.style.color='#4aff8a';el.style.borderColor='#4aff8a';}}
+    }}).catch(e=>{{
+      var el=document.getElementById('val-msg');
+      el.style.display='block';
+      el.style.color='#4aff8a';
+      el.textContent='✓ Validé — serveur arrêté (normal)';
+    }});
 }}
 
 window.onresize=resizeFrame;
@@ -479,7 +487,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(resp)
 
         def stop():
-            import time; time.sleep(0.5); server.shutdown()
+            import time; time.sleep(2.0); server.shutdown()
         threading.Thread(target=stop, daemon=True).start()
 
 
