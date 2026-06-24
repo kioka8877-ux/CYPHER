@@ -34,6 +34,7 @@ jobs:
       - name: Install Manim + ATLAS
         run: |
           pip install manim==0.20.1
+          pip install geopandas matplotlib requests Pillow
           pip install git+https://github.com/kioka8877-ux/ATLAS.git || true
 
       - name: Download render_spec.json + visuels from release
@@ -77,6 +78,7 @@ jobs:
           python -m manim CypherScene.py CypherScene \
             --format mp4 \
             --fps 30 \
+            --width 1080 --height 1920 \
             --media_dir ./media \
             --disable_caching \
             -q h || true
