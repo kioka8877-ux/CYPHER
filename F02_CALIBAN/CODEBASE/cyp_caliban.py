@@ -308,9 +308,9 @@ function addLogoMarkers(seg, currentFrame){{
     const initials=b.name.split(/\s+/).map(w=>w[0]).join('').toUpperCase().slice(0,2);
     const icon=L.divIcon({{
       className:'',
-      html:`<div style="background:#fff;border-radius:8px;padding:3px;width:54px;height:54px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.7);border:2px solid ${{getCountryColor()}};transition:all .3s">
+      html:`<div style="background:#fff;border-radius:8px;padding:3px;width:54px;height:54px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.7);border:2px solid rgba(255,255,255,0.6);transition:all .3s">
         <img src="${{b.logo}}" style="max-width:46px;max-height:46px;object-fit:contain"
-          onerror="this.outerHTML='<div style=width:50px;height:50px;background:${{getCountryColor()}};border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:14px>${{initials}}</div>'">
+          onerror="this.outerHTML='<div style=width:50px;height:50px;background:#444;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:14px>${{initials}}</div>'">
       </div>`,
       iconSize:[54,54], iconAnchor:[27,27]
     }});
