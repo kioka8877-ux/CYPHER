@@ -8,6 +8,10 @@ try:
 except ImportError:
     raise RuntimeError("manim non installe")
 
+from manim import config
+config.pixel_width = 1080
+config.pixel_height = 1920
+
 
 def load_spec() -> dict:
     for p in [Path("render_spec.json"), Path("../render_spec.json"),
@@ -136,7 +140,7 @@ class CypherScene(Scene):
                 if logo_mob is None:
                     bname = brands[0].get("name", "").upper()[:12]
                     bb = RoundedRectangle(corner_radius=0.12, width=3.8, height=0.75,
-                                         fill_color="#FFFFFF", fill_opacity=1.0, stroke_width=0)
+                                           fill_color="#FFFFFF", fill_opacity=1.0, stroke_width=0)
                     bb.move_to(UP * fh * 0.34)
                     bt = Text(bname, font_size=20, color="#050B08")
                     bt.move_to(bb.get_center())
@@ -158,3 +162,4 @@ class CypherScene(Scene):
             outs = [FadeOut(map_mob, run_time=spd*0.7), FadeOut(sub, run_time=spd*0.7)]
             if logo_mob: outs.append(FadeOut(logo_mob, run_time=spd*0.7))
             self.play(*outs)
+
