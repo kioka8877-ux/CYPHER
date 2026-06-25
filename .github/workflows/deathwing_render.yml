@@ -75,13 +75,7 @@ jobs:
       - name: Render CypherScene
         run: |
           cd render_workspace
-          python -m manim CypherScene.py CypherScene \
-            --format mp4 \
-            --fps 30 \
-            --pixel_width 1080 --pixel_height 1920 \
-            --media_dir ./media \
-            --disable_caching \
-            -q h
+          python -m manim render CypherScene.py CypherScene -q h
           echo "[DEATHWING] Fichiers MP4 après render :"
           find ./media -name "*.mp4" -ls 2>/dev/null || echo "Aucun MP4"
           # 1. Cherche le fichier final (hors partial)
@@ -117,5 +111,6 @@ jobs:
             --repo ${{ github.repository }} \
             --clobber
           echo "[DEATHWING] Video → release cyp-${{ inputs.run_id }}"
+
 
 
