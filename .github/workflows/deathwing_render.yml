@@ -81,7 +81,7 @@ jobs:
             --width 1080 --height 1920 \
             --media_dir ./media \
             --disable_caching \
-            -q h || true
+            -q h
           echo "[DEATHWING] Fichiers MP4 après render :"
           find ./media -name "*.mp4" -ls 2>/dev/null || echo "Aucun MP4"
           # 1. Cherche le fichier final (hors partial)
@@ -99,6 +99,7 @@ jobs:
           ABS_RENDERED="render_workspace/${RENDERED#./}"
           echo "RENDERED=$ABS_RENDERED" >> $GITHUB_ENV
           echo "[DEATHWING] RENDERED=$RENDERED"
+          if [ -z "$ABS_RENDERED" ]; then echo "[DEATHWING] ERREUR: aucun MP4 produit" && exit 1; fi
 
       - name: Upload video artifact
         uses: actions/upload-artifact@v4
@@ -116,4 +117,5 @@ jobs:
             --repo ${{ github.repository }} \
             --clobber
           echo "[DEATHWING] Video → release cyp-${{ inputs.run_id }}"
+
 
