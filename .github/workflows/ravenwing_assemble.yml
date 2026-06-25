@@ -20,7 +20,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       RUN_ID: ${{ inputs.run_id }}
       HAS_AUDIO: ${{ inputs.has_audio }}
-      TAG: cyp-${{ inputs.run_id }}
+      TAG: ${{ inputs.run_id }}
 
     steps:
       - name: Checkout
