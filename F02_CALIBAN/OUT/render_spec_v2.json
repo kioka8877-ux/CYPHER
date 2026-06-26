@@ -1,0 +1,649 @@
+{
+  "meta": {
+    "fps": 30,
+    "duration_seconds": 62.0902,
+    "total_frames": 1863,
+    "audio_path": "/tmp/f01_out/audio_clean.mp3",
+    "model": "medium",
+    "language": "en",
+    "language_probability": 0.9728,
+    "word_count": 134,
+    "strong_word_count": 43,
+    "run_id": "CYP_20260622_0854",
+    "format": "short",
+    "map_style": "sat",
+    "total_segments": 21
+  },
+  "segments": [
+    {
+      "id": 0,
+      "text": "United States has Apple, Nike, Coca-Cola, McDonald's, and Tesla.",
+      "start": 0,
+      "end": 4.22,
+      "start_frame": 0,
+      "end_frame": 127,
+      "country": "united states",
+      "iso": "US",
+      "lat": 38.9,
+      "lon": -95.7,
+      "zoom": 4,
+      "brands": [
+        {
+          "name": "apple",
+          "domain": "apple.com",
+          "logo": "https://logo.clearbit.com/apple.com?size=80",
+          "word_frame": 32
+        },
+        {
+          "name": "nike",
+          "domain": "nike.com",
+          "logo": "https://logo.clearbit.com/nike.com?size=80",
+          "word_frame": 44
+        },
+        {
+          "name": "coca-cola",
+          "domain": "coca-cola.com",
+          "logo": "https://logo.clearbit.com/coca-cola.com?size=80",
+          "word_frame": 0
+        },
+        {
+          "name": "mcdonald's",
+          "domain": "mcdonalds.com",
+          "logo": "https://logo.clearbit.com/mcdonalds.com?size=80",
+          "word_frame": 90
+        },
+        {
+          "name": "tesla",
+          "domain": "tesla.com",
+          "logo": "https://logo.clearbit.com/tesla.com?size=80",
+          "word_frame": 112
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "text": "Germany has BMW, Mercedes-Benz, and Adidas. Japan has Toyota, Sony, and Nintendo.",
+      "start": 4.92,
+      "end": 8.15,
+      "start_frame": 148,
+      "end_frame": 245,
+      "country": "germany",
+      "iso": "DE",
+      "lat": 51.2,
+      "lon": 10.4,
+      "zoom": 5,
+      "brands": [
+        {
+          "name": "bmw",
+          "domain": "bmw.com",
+          "logo": "https://logo.clearbit.com/bmw.com?size=80",
+          "word_frame": 162
+        },
+        {
+          "name": "mercedes-benz",
+          "domain": "mercedes-benz.com",
+          "logo": "https://logo.clearbit.com/mercedes-benz.com?size=80",
+          "word_frame": 148
+        },
+        {
+          "name": "adidas",
+          "domain": "adidas.com",
+          "logo": "https://logo.clearbit.com/adidas.com?size=80",
+          "word_frame": 231
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "text": "Germany has BMW, Mercedes-Benz, and Adidas. Japan has Toyota, Sony, and Nintendo.",
+      "start": 8.15,
+      "end": 11.38,
+      "start_frame": 245,
+      "end_frame": 341,
+      "country": "japan",
+      "iso": "JP",
+      "lat": 36.2,
+      "lon": 138.3,
+      "zoom": 5,
+      "brands": [
+        {
+          "name": "toyota",
+          "domain": "toyota.com",
+          "logo": "https://logo.clearbit.com/toyota.com?size=80",
+          "word_frame": 284
+        },
+        {
+          "name": "sony",
+          "domain": "sony.com",
+          "logo": "https://logo.clearbit.com/sony.com?size=80",
+          "word_frame": 307
+        },
+        {
+          "name": "nintendo",
+          "domain": "nintendo.com",
+          "logo": "https://logo.clearbit.com/nintendo.com?size=80",
+          "word_frame": 328
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "text": "South Korea has Samsung, Hyundai, and LG. France has Airbus, Louis Vuitton, and Chanel.",
+      "start": 12.16,
+      "end": 15.78,
+      "start_frame": 365,
+      "end_frame": 474,
+      "country": "south korea",
+      "iso": "KR",
+      "lat": 35.9,
+      "lon": 127.8,
+      "zoom": 6,
+      "brands": [
+        {
+          "name": "samsung",
+          "domain": "samsung.com",
+          "logo": "https://logo.clearbit.com/samsung.com?size=80",
+          "word_frame": 390
+        },
+        {
+          "name": "hyundai",
+          "domain": "hyundai.com",
+          "logo": "https://logo.clearbit.com/hyundai.com?size=80",
+          "word_frame": 419
+        },
+        {
+          "name": "lg",
+          "domain": "lg.com",
+          "logo": "https://logo.clearbit.com/lg.com?size=80",
+          "word_frame": 439
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "text": "South Korea has Samsung, Hyundai, and LG. France has Airbus, Louis Vuitton, and Chanel.",
+      "start": 15.78,
+      "end": 18.2,
+      "start_frame": 474,
+      "end_frame": 546,
+      "country": "france",
+      "iso": "FR",
+      "lat": 46.6,
+      "lon": 2.2,
+      "zoom": 5,
+      "brands": [
+        {
+          "name": "airbus",
+          "domain": "airbus.com",
+          "logo": "https://logo.clearbit.com/airbus.com?size=80",
+          "word_frame": 486
+        },
+        {
+          "name": "louis vuitton",
+          "domain": "louisvuitton.com",
+          "logo": "https://logo.clearbit.com/louisvuitton.com?size=80",
+          "word_frame": 508
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "text": "Italy has Ferrari, Gucci, and Lamborghini. Sweden has Ikea, Volvo, and Spotify.",
+      "start": 19,
+      "end": 21.66,
+      "start_frame": 570,
+      "end_frame": 650,
+      "country": "italy",
+      "iso": "IT",
+      "lat": 42.8,
+      "lon": 12.6,
+      "zoom": 5,
+      "brands": [
+        {
+          "name": "ferrari",
+          "domain": "ferrari.com",
+          "logo": "https://logo.clearbit.com/ferrari.com?size=80",
+          "word_frame": 585
+        },
+        {
+          "name": "gucci",
+          "domain": "gucci.com",
+          "logo": "https://logo.clearbit.com/gucci.com?size=80",
+          "word_frame": 608
+        },
+        {
+          "name": "lamborghini",
+          "domain": "lamborghini.com",
+          "logo": "https://logo.clearbit.com/lamborghini.com?size=80",
+          "word_frame": 628
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "text": "Italy has Ferrari, Gucci, and Lamborghini. Sweden has Ikea, Volvo, and Spotify.",
+      "start": 21.66,
+      "end": 24.32,
+      "start_frame": 650,
+      "end_frame": 730,
+      "country": "sweden",
+      "iso": "SE",
+      "lat": 62,
+      "lon": 15,
+      "zoom": 5,
+      "brands": [
+        {
+          "name": "ikea",
+          "domain": "ikea.com",
+          "logo": "https://logo.clearbit.com/ikea.com?size=80",
+          "word_frame": 675
+        },
+        {
+          "name": "volvo",
+          "domain": "volvo.com",
+          "logo": "https://logo.clearbit.com/volvo.com?size=80",
+          "word_frame": 700
+        },
+        {
+          "name": "spotify",
+          "domain": "spotify.com",
+          "logo": "https://logo.clearbit.com/spotify.com?size=80",
+          "word_frame": 717
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "text": "China has TikTok, Huawei, and DJI. Canada has Shopify, and Bombardier. The United Kingdom",
+      "start": 24.32,
+      "end": 28.34,
+      "start_frame": 730,
+      "end_frame": 850,
+      "country": "china",
+      "iso": "CN",
+      "lat": 35.9,
+      "lon": 104.2,
+      "zoom": 4,
+      "brands": [
+        {
+          "name": "tiktok",
+          "domain": "tiktok.com",
+          "logo": "https://logo.clearbit.com/tiktok.com?size=80",
+          "word_frame": 760
+        },
+        {
+          "name": "huawei",
+          "domain": "huawei.com",
+          "logo": "https://logo.clearbit.com/huawei.com?size=80",
+          "word_frame": 786
+        },
+        {
+          "name": "dji",
+          "domain": "dji.com",
+          "logo": "https://logo.clearbit.com/dji.com?size=80",
+          "word_frame": 811
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "text": "China has TikTok, Huawei, and DJI. Canada has Shopify, and Bombardier. The United Kingdom",
+      "start": 28.34,
+      "end": 31.02,
+      "start_frame": 850,
+      "end_frame": 931,
+      "country": "canada",
+      "iso": "CA",
+      "lat": 56.1,
+      "lon": -106.3,
+      "zoom": 4,
+      "brands": [
+        {
+          "name": "shopify",
+          "domain": "shopify.com",
+          "logo": "https://logo.clearbit.com/shopify.com?size=80",
+          "word_frame": 857
+        },
+        {
+          "name": "bombardier",
+          "domain": "bombardier.com",
+          "logo": "https://logo.clearbit.com/bombardier.com?size=80",
+          "word_frame": 879
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "text": "has Rolls-Royce, Burberry, and British Airways. The United Arab Emirates has Emirates Airline.",
+      "start": 31.02,
+      "end": 34.92,
+      "start_frame": 931,
+      "end_frame": 1048,
+      "country": "united kingdom",
+      "iso": "GB",
+      "lat": 53.5,
+      "lon": -1.5,
+      "zoom": 5,
+      "brands": [
+        {
+          "name": "rolls-royce",
+          "domain": "rolls-royce.com",
+          "logo": "https://logo.clearbit.com/rolls-royce.com?size=80",
+          "word_frame": 931
+        },
+        {
+          "name": "burberry",
+          "domain": "burberry.com",
+          "logo": "https://logo.clearbit.com/burberry.com?size=80",
+          "word_frame": 971
+        },
+        {
+          "name": "british airways",
+          "domain": "britishairways.com",
+          "logo": "https://logo.clearbit.com/britishairways.com?size=80",
+          "word_frame": 984
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "text": "has Rolls-Royce, Burberry, and British Airways. The United Arab Emirates has Emirates Airline.",
+      "start": 34.92,
+      "end": 36.22,
+      "start_frame": 1048,
+      "end_frame": 1087,
+      "country": "united arab emirates",
+      "iso": "AE",
+      "lat": 23.4,
+      "lon": 53.8,
+      "zoom": 6,
+      "brands": [
+        {
+          "name": "emirates",
+          "domain": "emirates.com",
+          "logo": "https://logo.clearbit.com/emirates.com?size=80",
+          "word_frame": 1044
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "text": "Taiwan has TSMC and Acer. Switzerland has Nestle, Rolex, and UBS. The Netherlands has",
+      "start": 36.62,
+      "end": 39.08,
+      "start_frame": 1099,
+      "end_frame": 1172,
+      "country": "taiwan",
+      "iso": "TW",
+      "lat": 23.7,
+      "lon": 120.9,
+      "zoom": 7,
+      "brands": [
+        {
+          "name": "tsmc",
+          "domain": "tsmc.com",
+          "logo": "https://logo.clearbit.com/tsmc.com?size=80",
+          "word_frame": 1118
+        },
+        {
+          "name": "acer",
+          "domain": "acer.com",
+          "logo": "https://logo.clearbit.com/acer.com?size=80",
+          "word_frame": 1149
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "text": "Taiwan has TSMC and Acer. Switzerland has Nestle, Rolex, and UBS. The Netherlands has",
+      "start": 39.08,
+      "end": 42.76,
+      "start_frame": 1172,
+      "end_frame": 1283,
+      "country": "switzerland",
+      "iso": "CH",
+      "lat": 46.8,
+      "lon": 8.2,
+      "zoom": 6,
+      "brands": [
+        {
+          "name": "nestle",
+          "domain": "nestle.com",
+          "logo": "https://logo.clearbit.com/nestle.com?size=80",
+          "word_frame": 1192
+        },
+        {
+          "name": "rolex",
+          "domain": "rolex.com",
+          "logo": "https://logo.clearbit.com/rolex.com?size=80",
+          "word_frame": 1218
+        },
+        {
+          "name": "ubs",
+          "domain": "ubs.com",
+          "logo": "https://logo.clearbit.com/ubs.com?size=80",
+          "word_frame": 1233
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "text": "Philips, Heineken, and ASML. Spain has Zara, Santander, and SEAT. India has Tata, Infosys,",
+      "start": 42.76,
+      "end": 46.88,
+      "start_frame": 1283,
+      "end_frame": 1406,
+      "country": "netherlands",
+      "iso": "NL",
+      "lat": 52.1,
+      "lon": 5.3,
+      "zoom": 6,
+      "brands": [
+        {
+          "name": "philips",
+          "domain": "philips.com",
+          "logo": "https://logo.clearbit.com/philips.com?size=80",
+          "word_frame": 1282
+        },
+        {
+          "name": "heineken",
+          "domain": "heineken.com",
+          "logo": "https://logo.clearbit.com/heineken.com?size=80",
+          "word_frame": 1301
+        },
+        {
+          "name": "asml",
+          "domain": "asml.com",
+          "logo": "https://logo.clearbit.com/asml.com?size=80",
+          "word_frame": 1324
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "text": "Philips, Heineken, and ASML. Spain has Zara, Santander, and SEAT. India has Tata, Infosys,",
+      "start": 46.88,
+      "end": 48.25,
+      "start_frame": 1406,
+      "end_frame": 1447,
+      "country": "spain",
+      "iso": "ES",
+      "lat": 40.5,
+      "lon": -3.7,
+      "zoom": 5,
+      "brands": [
+        {
+          "name": "zara",
+          "domain": "zara.com",
+          "logo": "https://logo.clearbit.com/zara.com?size=80",
+          "word_frame": 1371
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "text": "Philips, Heineken, and ASML. Spain has Zara, Santander, and SEAT. India has Tata, Infosys,",
+      "start": 48.25,
+      "end": 50.71,
+      "start_frame": 1447,
+      "end_frame": 1521,
+      "country": "india",
+      "iso": "IN",
+      "lat": 20.6,
+      "lon": 78.9,
+      "zoom": 4,
+      "brands": [
+        {
+          "name": "tata",
+          "domain": "tata.com",
+          "logo": "https://logo.clearbit.com/tata.com?size=80",
+          "word_frame": 1453
+        },
+        {
+          "name": "reliance",
+          "domain": "ril.com",
+          "logo": "https://logo.clearbit.com/ril.com?size=80",
+          "word_frame": 1497
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "text": "and Reliance. Australia has Qantas, Atlassian, and Canva. Singapore has Grab, and Singapore",
+      "start": 50.71,
+      "end": 53.99,
+      "start_frame": 1521,
+      "end_frame": 1620,
+      "country": "australia",
+      "iso": "AU",
+      "lat": -25.3,
+      "lon": 133.8,
+      "zoom": 4,
+      "brands": [
+        {
+          "name": "qantas",
+          "domain": "qantas.com",
+          "logo": "https://logo.clearbit.com/qantas.com?size=80",
+          "word_frame": 1547
+        },
+        {
+          "name": "atlassian",
+          "domain": "atlassian.com",
+          "logo": "https://logo.clearbit.com/atlassian.com?size=80",
+          "word_frame": 1566
+        },
+        {
+          "name": "canva",
+          "domain": "canva.com",
+          "logo": "https://logo.clearbit.com/canva.com?size=80",
+          "word_frame": 1585
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "text": "and Reliance. Australia has Qantas, Atlassian, and Canva. Singapore has Grab, and Singapore",
+      "start": 53.99,
+      "end": 55.08,
+      "start_frame": 1620,
+      "end_frame": 1652,
+      "country": "singapore",
+      "iso": "SG",
+      "lat": 1.35,
+      "lon": 103.8,
+      "zoom": 8,
+      "brands": [
+        {
+          "name": "grab",
+          "domain": "grab.com",
+          "logo": "https://logo.clearbit.com/grab.com?size=80",
+          "word_frame": 1628
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "text": "Airlines. Finland has Nokia, and Kone. Denmark has Lego, and Maersk. Brazil has Petrobras,",
+      "start": 55.08,
+      "end": 57.07,
+      "start_frame": 1652,
+      "end_frame": 1712,
+      "country": "finland",
+      "iso": "FI",
+      "lat": 61.9,
+      "lon": 25.7,
+      "zoom": 5,
+      "brands": [
+        {
+          "name": "nokia",
+          "domain": "nokia.com",
+          "logo": "https://logo.clearbit.com/nokia.com?size=80",
+          "word_frame": 1698
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "text": "Airlines. Finland has Nokia, and Kone. Denmark has Lego, and Maersk. Brazil has Petrobras,",
+      "start": 57.07,
+      "end": 61.06,
+      "start_frame": 1712,
+      "end_frame": 1832,
+      "country": "denmark",
+      "iso": "DK",
+      "lat": 56,
+      "lon": 9.5,
+      "zoom": 6,
+      "brands": [
+        {
+          "name": "lego",
+          "domain": "lego.com",
+          "logo": "https://logo.clearbit.com/lego.com?size=80",
+          "word_frame": 1760
+        },
+        {
+          "name": "maersk",
+          "domain": "maersk.com",
+          "logo": "https://logo.clearbit.com/maersk.com?size=80",
+          "word_frame": 1774
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "text": "and Embraer.",
+      "start": 61.3,
+      "end": 61.78,
+      "start_frame": 1839,
+      "end_frame": 1853,
+      "country": "brazil",
+      "iso": "BR",
+      "lat": -14.2,
+      "lon": -51.9,
+      "zoom": 4,
+      "brands": [
+        {
+          "name": "embraer",
+          "domain": "embraer.com",
+          "logo": "https://logo.clearbit.com/embraer.com?size=80",
+          "word_frame": 1842
+        }
+      ]
+    }
+  ],
+  "display": {
+    "font": "'Arrila Black',Impact,sans-serif",
+    "font_color": "#a3f609",
+    "font_size": 18,
+    "position": "bottom",
+    "animation": "ltr",
+    "visual_scale": 0.85
+  },
+  "map_config": {
+    "style": "sat",
+    "country_fill": "#baa0da",
+    "country_opacity": 0.45,
+    "border_color": "#FFFFFF",
+    "border_width": 2
+  }
+}
