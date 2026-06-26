@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""CypherScene v3 — Template Manim. Lit render_spec.json, forge video 9:16."""
-import json, tempfile
+"""CypherScene v4 — Template Manim. Lit render_spec.json, forge video 9:16."""
+import json, tempfile, os
 from pathlib import Path
 
 try:
@@ -8,7 +8,7 @@ try:
     config.pixel_width = 1080
     config.pixel_height = 1920
     config.frame_height = 8.0
-    config.frame_width = config.frame_height * 1080 / 1920  # = 4.5 (portrait)
+    config.frame_width = config.frame_height * 1080 / 1920
     from manim import *
 except ImportError:
     raise RuntimeError("manim non installe")
@@ -23,26 +23,35 @@ def load_spec() -> dict:
 
 
 def generate_map(lat, lon, iso, country_color, out_path, w=810, h=1080):
-    """FIX 1: shapefile via URL (geopandas.datasets deprecie/casse)."""
+    """FIX 1: detecter dynamiquement la colonne ISO (iso_a3 / ISO_A3 / ADM0_A3)."""
     try:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         import geopandas as gpd
 
-        # Tente le nouveau chemin, sinon telecharge NaturalEarth direct
+        # Tente local, sinon telecharge
         try:
             world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
         except Exception:
             ne_url = "https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip"
             world = gpd.read_file(ne_url)
 
+        # Detecter la colonne ISO dynamiquement
+        iso_col = None
+        for col in ["iso_a3", "ISO_A3", "ADM0_A3", "ISO_A3_EH", "SOV_A3"]:
+            if col in world.columns:
+                iso_col = col
+                break
+        if iso_col is None:
+            print(f"[MAP] Colonnes dispo: {list(world.columns)}")
+
         fig, ax = plt.subplots(figsize=(w/100, h/100), dpi=100)
         fig.patch.set_facecolor("#050B08")
         ax.set_facecolor("#050B08")
         world.plot(ax=ax, color="#1A2E25", edgecolor="#FFFFFF", linewidth=0.3)
-        if iso:
-            hi = world[world["iso_a3"] == iso.upper()]
+        if iso and iso_col:
+            hi = world[world[iso_col] == iso.upper()]
             if not hi.empty:
                 hi.plot(ax=ax, color=country_color, edgecolor="#FFFFFF", linewidth=1.5)
                 b = hi.total_bounds
@@ -65,20 +74,29 @@ def generate_map(lat, lon, iso, country_color, out_path, w=810, h=1080):
 
 
 def dl_logo(url, path):
+    """FIX 2: timeout + headers user-agent pour contourner blocages DNS/CDN."""
     try:
         import urllib.request
-        urllib.request.urlretrieve(url, path)
-        return Path(path).stat().st_size > 800
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = resp.read()
+        Path(path).write_bytes(data)
+        return len(data) > 800
     except Exception as e:
         print(f"[LOGO] {e}"); return False
 
 
 def safe_text(txt, sz, col, font):
-    f = font if font not in ("Arrila Black", "MedievalSharp") else "DejaVu Sans"
-    try:
-        return Text(txt, font_size=sz, color=col, font=f)
-    except Exception:
-        return Text(txt, font_size=sz, color=col)
+    """FIX 3: fallback police robuste — DejaVu Sans toujours dispo sur Ubuntu runner."""
+    # Tenter les polices dans l'ordre de preference
+    for f in [font, "Impact", "DejaVu Sans"]:
+        if not f or "," in f:
+            continue
+        try:
+            return Text(txt, font_size=sz, color=col, font=f)
+        except Exception:
+            continue
+    return Text(txt, font_size=sz, color=col)
 
 
 class CypherScene(Scene):
@@ -89,24 +107,26 @@ class CypherScene(Scene):
         display   = spec.get("display", {})
         map_conf  = spec.get("map_config", {})
 
-        font    = display.get("font", "DejaVu Sans")
-        fcolor  = display.get("font_color", "#FFFFFF")
-        fsize   = int(display.get("font_size", 38))
-        pos     = display.get("position", "bottom")
-        vs      = float(display.get("visual_scale", 0.85))   # FIX 2: lire visual_scale
-        spd     = 0.3
+        # FIX 3: extraire la premiere police de la liste CSS
+        raw_font = display.get("font", "DejaVu Sans")
+        font     = raw_font.split(",")[0].strip().strip("'").strip('"')
+        fcolor   = display.get("font_color", "#FFFFFF")
+        fsize    = int(display.get("font_size", 38))
+        pos      = display.get("position", "bottom")
+        vs       = float(display.get("visual_scale", 0.85))
+        spd      = 0.3
 
-        cfill   = map_conf.get("country_fill", "#B30006")
-        fps     = int(meta.get("fps", 30))
-        fw      = config.frame_width
-        fh      = config.frame_height
-        sub_y   = -fh * 0.38 if pos == "bottom" else 0.0
+        cfill    = map_conf.get("country_fill", "#B30006")
+        fps      = int(meta.get("fps", 30))
+        fw       = config.frame_width
+        fh       = config.frame_height
+        sub_y    = -fh * 0.38 if pos == "bottom" else 0.0
 
         self.camera.background_color = "#050B08"
         tmp = Path(tempfile.mkdtemp())
 
         for i, seg in enumerate(segments):
-            # FIX 3: sync au temps absolu (secondes) au lieu de frames sequentielles
+            # Sync au temps absolu
             seg_start = float(seg.get("start", seg.get("start_frame", i * 90) / fps))
             seg_end   = float(seg.get("end", seg.get("end_frame", (i+1) * 90) / fps))
             seg_dur   = max(seg_end - seg_start, 0.5)
@@ -118,7 +138,7 @@ class CypherScene(Scene):
             iso     = seg.get("iso", "")
             brands  = seg.get("brands", [])
 
-            # FIX 3: attendre le bon moment absolu avant de jouer ce segment
+            # Attendre le bon moment absolu
             current_time = self.renderer.time
             if seg_start > current_time + 0.05:
                 self.wait(seg_start - current_time)
@@ -137,9 +157,9 @@ class CypherScene(Scene):
                     stroke_color=cfill, stroke_width=2)
             map_mob.move_to(UP * fh * 0.1)
 
-            # -- logo -- FIX 2: scale relatif a fw (pas fh) + visual_scale applique
+            # -- logo (scale relatif a fw + visual_scale) --
             logo_mob = None
-            logo_height = fw * 0.12 * vs   # relatif a la largeur portrait + visual_scale
+            logo_height = fw * 0.12 * vs
             if brands:
                 lp = str(tmp / f"logo_{i:02d}.png")
                 lurl = brands[0].get("logo", "")
@@ -163,7 +183,7 @@ class CypherScene(Scene):
                     bb = RoundedRectangle(corner_radius=0.08, width=bw, height=logo_height + 0.2,
                                            fill_color="#FFFFFF", fill_opacity=1.0, stroke_width=0)
                     bb.move_to(UP * fh * 0.34)
-                    bt = Text(bname, font_size=txt_sz, color="#050B08")
+                    bt = safe_text(bname, txt_sz, "#050B08", font)
                     bt.move_to(bb.get_center())
                     logo_mob = VGroup(bb, bt)
 
