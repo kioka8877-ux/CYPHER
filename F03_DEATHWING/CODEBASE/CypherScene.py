@@ -36,6 +36,31 @@ ISO2TO3 = {
 }
 
 
+
+# ═══════════════════════════════════════════
+# Natural Earth data (gpd.datasets removed in GeoPandas 1.0)
+# ═══════════════════════════════════════════
+_NE_CACHE = None
+def _get_world():
+    global _NE_CACHE
+    if _NE_CACHE is not None:
+        return _NE_CACHE
+    import geopandas as gpd
+    import zipfile, io, requests
+    cache_dir = Path(tempfile.gettempdir()) / "ne_lowres"
+    shp = cache_dir / "ne_110m_admin_0_countries.shp"
+    if not shp.exists():
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        url = "https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip"
+        print(f"[CYPHER] Downloading Natural Earth shapefile...")
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+        with zipfile.ZipFile(io.BytesIO(r.content)) as zf:
+            zf.extractall(cache_dir)
+        print(f"[CYPHER] Natural Earth extracted to {cache_dir}")
+    _NE_CACHE = gpd.read_file(shp)
+    return _NE_CACHE
+
 def geo_to_manim(lon, lat):
     """Convert lon/lat to Manim coordinates on the map."""
     x = (lon - EXTENT[0]) / (EXTENT[1] - EXTENT[0]) * MAP_W - MAP_W / 2
@@ -62,7 +87,7 @@ def get_country_bounds(iso):
     """Get country bounds from shapefile (minx,miny,maxx,maxy) in manim coords."""
     try:
         import geopandas as gpd
-        world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+        world = _get_world()
         iso2 = iso.upper()
         iso3 = ISO2TO3.get(iso2, iso2)
         # Try iso_a3 first, then name matching
@@ -87,7 +112,7 @@ def generate_base_map(out_path):
     import geopandas as gpd
     import contextily as ctx
 
-    world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+    world = _get_world()
     world = world.to_crs(epsg=4326)
 
     fig, ax = plt.subplots(1, 1, figsize=(24, 14), dpi=150)
@@ -97,13 +122,13 @@ def generate_base_map(out_path):
     # Satellite basemap — Esri World Imagery
     try:
         ctx.add_basemap(ax, crs="EPSG:4326",
-                        source=ctx.providers.Esri.WorldImagery,
+                        source="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
                         zoom=3, attribution="")
     except Exception as e:
         print(f"[MAP] Esri tiles failed, fallback to CartoDB: {e}")
         try:
             ctx.add_basemap(ax, crs="EPSG:4326",
-                            source=ctx.providers.CartoDB.DarkMatter,
+                            source="https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
                             zoom=3, attribution="")
         except:
             world.plot(ax=ax, color="#1a1a2e", edgecolor="#333", linewidth=0.3)
@@ -126,7 +151,7 @@ def generate_highlight(iso, out_path, fill_color="#baa0da", opacity=0.55):
     import geopandas as gpd
     from matplotlib.colors import to_rgba
 
-    world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+    world = _get_world()
     iso3 = ISO2TO3.get(iso.upper(), iso.upper())
 
     hi = None
