@@ -1,0 +1,145 @@
+name: CYPHER — Render All Chunks + Assemble
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "CYPHER run_id (validated by Chunk 0)"
+        required: true
+      seg_count:
+        description: "Number of segments (from chunk0 output)"
+        required: true
+        default: "21"
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        seg: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev libpango1.0-dev \
+            fonts-liberation fonts-dejavu-core \
+            libpangocairo-1.0-0 libglib2.0-dev pkg-config build-essential \
+            ffmpeg
+          sudo fc-cache -fv
+          pip install --upgrade pip wheel
+
+      - name: Install Manim + geo
+        run: |
+          pip install manim==0.20.1
+          pip install geopandas matplotlib contextily requests Pillow
+
+      - name: Download assets from release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          mkdir -p ws && cd ws
+          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "render_spec_v2.json" --dir . || \
+          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "render_spec.json" --dir .
+          ls -lh
+
+      - name: Copy scene files
+        run: |
+          cp F03_DEATHWING/CODEBASE/CypherScene.py ws/CypherScene.py
+          cp F03_DEATHWING/CODEBASE/cyp_camera_plan.py ws/cyp_camera_plan.py
+
+      - name: Download camera_plan.json
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "camera_plan.json" --dir ws
+
+      - name: Skip if segment out of range
+        id: check
+        run: |
+          if [ ${{ matrix.seg }} -ge ${{ inputs.seg_count }} ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Render segment ${{ matrix.seg }}
+        if: steps.check.outputs.skip == 'false'
+        run: |
+          cd ws
+          CYP_SEG_FROM=${{ matrix.seg }} CYP_SEG_TO=${{ matrix.seg }} python -m manim render CypherScene.py CypherScene -qh
+          OUT=$(find ./media -name "*.mp4" 2>/dev/null | grep -v partial | head -1)
+          if [ -z "$OUT" ]; then echo "::error::seg ${{ matrix.seg }} failed" && exit 1; fi
+          printf -v PAD "%02d" ${{ matrix.seg }}
+          cp "$OUT" "seg_$PAD.mp4"
+          ls -lh "seg_$PAD.mp4"
+
+      - name: Upload segment to release
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          cd ws
+          printf -v PAD "%02d" ${{ matrix.seg }}
+          gh release upload "${{ inputs.run_id }}" "seg_$PAD.mp4" --repo ${{ github.repository }} --clobber
+
+  assemble:
+    needs: render
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+
+      - name: Download segments + audio
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          mkdir -p out && cd out
+          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "seg_*.mp4" --dir .
+          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "*.mp3" --dir . || true
+          ls -lh
+
+      - name: Concat + mux audio
+        run: |
+          cd out
+          ls seg_*.mp4 | sort > list.txt
+          : > concat.txt
+          while read f; do echo "file '$f'" >> concat.txt; done < list.txt
+          cat concat.txt
+          ffmpeg -y -f concat -safe 0 -i concat.txt -c copy joined.mp4
+          AUDIO=$(ls *.mp3 2>/dev/null | head -1 || true)
+          if [ -n "$AUDIO" ]; then
+            ffmpeg -y -i joined.mp4 -i "$AUDIO" -c:v copy -c:a aac -shortest cypher_final.mp4
+          else
+            cp joined.mp4 cypher_final.mp4
+          fi
+          ls -lh cypher_final.mp4
+
+      - name: Upload final
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypher-final-${{ inputs.run_id }}
+          path: out/cypher_final.mp4
+          retention-days: 14
+
+      - name: Publish final to release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          cd out
+          gh release upload "${{ inputs.run_id }}" cypher_final.mp4 --repo ${{ github.repository }} --clobber
+          echo "✅ cypher_final.mp4 published"
