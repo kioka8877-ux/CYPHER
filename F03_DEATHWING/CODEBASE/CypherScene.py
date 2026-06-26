@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CypherScene v6 — Carte monde unique + camera mobile + logos geolocalises."""
+"""CypherScene v7 — Carte monde unique + camera mobile + logos geolocalises."""
 import json, tempfile, math
 from pathlib import Path
 
@@ -182,6 +182,21 @@ class CypherScene(MovingCameraScene):
         display  = spec.get("display", {})
         map_conf = spec.get("map_config", {})
 
+        # ── v7 chunked rendering: segment range + camera plan ──
+        import os
+        _last    = len(segments) - 1
+        SEG_FROM = max(0, min(int(os.environ.get("CYP_SEG_FROM", "0")), max(_last, 0)))
+        SEG_TO   = max(SEG_FROM, min(int(os.environ.get("CYP_SEG_TO", str(_last))), max(_last, 0)))
+        _all_seg = segments
+        T0       = float(_all_seg[SEG_FROM].get("start", 0)) if _all_seg else 0.0
+        segments = _all_seg[SEG_FROM:SEG_TO + 1]
+        _cam_entry = None
+        if SEG_FROM > 0 and Path("camera_plan.json").exists():
+            _plan = json.loads(Path("camera_plan.json").read_text())
+            if SEG_FROM < len(_plan):
+                _cam_entry = _plan[SEG_FROM]
+        print(f"[CYPHER v7] segments {SEG_FROM}..{SEG_TO} T0={T0:.2f}s cam_entry={_cam_entry}")
+
         raw_font = display.get("font", "DejaVu Sans")
         font     = raw_font.split(",")[0].strip().strip("'").strip('"')
         fcolor   = display.get("font_color", "#FFFFFF")
@@ -213,7 +228,7 @@ class CypherScene(MovingCameraScene):
 
         # ══════════════════════════════════════════════
         # PHASE 2: Build Manim scene
-        # ══════════════════════════════════════════════
+        # ════════════════════════════��═════════════════
         print("[CYPHER] Building scene...")
 
         # Base map (always visible)
@@ -222,16 +237,19 @@ class CypherScene(MovingCameraScene):
         base_mob.move_to(ORIGIN)
         self.add(base_mob)
 
-        # Camera starts showing full world
-        self.camera.frame.set_width(MAP_W * 1.05)
-        self.camera.frame.move_to(ORIGIN)
-
-        # Intro: hold full map view 1s
-        self.wait(0.5)
+        # Camera start: world view (chunk0) OR resume previous chunk (camera plan)
+        if _cam_entry is not None:
+            self.camera.frame.set_width(float(_cam_entry.get("width", MAP_W * 1.05)))
+            _c = _cam_entry.get("center", [0, 0])
+            self.camera.frame.move_to([float(_c[0]), float(_c[1]), 0])
+        else:
+            self.camera.frame.set_width(MAP_W * 1.05)
+            self.camera.frame.move_to(ORIGIN)
+            self.wait(0.5)  # intro: hold full map view
 
         for i, seg in enumerate(segments):
-            seg_start = float(seg.get("start", 0))
-            seg_end   = float(seg.get("end", seg_start + 3))
+            seg_start = float(seg.get("start", 0)) - T0
+            seg_end   = float(seg.get("end", float(seg.get("start", 0)) + 3)) - T0
             zoom_lvl  = float(seg.get("zoom", 5))
             text      = seg.get("text", "")
             lat       = float(seg.get("lat", 0))
@@ -283,7 +301,7 @@ class CypherScene(MovingCameraScene):
 
             for bi, brand in enumerate(brands):
                 wf = int(brand.get("word_frame", 0))
-                logo_time = wf / fps
+                logo_time = wf / fps - T0
                 # Wait for word_frame
                 ct2 = self.renderer.time
                 if logo_time > ct2 + 0.08:
