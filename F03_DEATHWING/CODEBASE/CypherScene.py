@@ -4,13 +4,16 @@ import json, tempfile
 from pathlib import Path
 
 try:
+    from manim import config
+    # 9:16 — pixels ET systeme de coordonnees poses AVANT l'import *,
+    # sinon frame_width/height restent en 16:9 -> letterbox.
+    config.pixel_width = 1080
+    config.pixel_height = 1920
+    config.frame_height = 8.0
+    config.frame_width = config.frame_height * 1080 / 1920  # = 4.5 (portrait)
     from manim import *
 except ImportError:
     raise RuntimeError("manim non installe")
-
-from manim import config
-config.pixel_width = 1080
-config.pixel_height = 1920
 
 
 def load_spec() -> dict:
@@ -21,7 +24,7 @@ def load_spec() -> dict:
     raise FileNotFoundError("render_spec.json introuvable")
 
 
-def generate_map(lat, lon, iso, country_color, out_path, w=1080, h=720):
+def generate_map(lat, lon, iso, country_color, out_path, w=810, h=1080):
     try:
         import matplotlib
         matplotlib.use("Agg")
