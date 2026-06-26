@@ -1,0 +1,87 @@
+name: CYPHER — Chunk 0 (Setup + Camera Plan + Preview)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "CYPHER run_id (ex: CYP_20260622_0854)"
+        required: true
+
+jobs:
+  chunk0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps (cairo + pango + ffmpeg)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libcairo2-dev libpango1.0-dev \
+            fonts-liberation fonts-dejavu-core \
+            libpangocairo-1.0-0 libglib2.0-dev pkg-config build-essential \
+            ffmpeg
+          sudo fc-cache -fv
+          pip install --upgrade pip wheel
+
+      - name: Install Manim + ATLAS
+        run: |
+          pip install manim==0.20.1
+          pip install geopandas matplotlib requests Pillow
+          pip install git+https://github.com/kioka8877-ux/ATLAS.git || true
+
+      - name: Download render_spec.json + visuels from release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          mkdir -p render_workspace/visuals
+          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "render_spec.json" --dir render_workspace
+          for ext in png jpg gif mp4; do
+            gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "*.$ext" --dir render_workspace/visuals || true
+          done
+          ls -lh render_workspace/
+
+      - name: Copy scene + camera plan generator
+        run: |
+          cp F03_DEATHWING/CODEBASE/CypherScene.py render_workspace/CypherScene.py
+          cp F03_DEATHWING/CODEBASE/cyp_camera_plan.py render_workspace/cyp_camera_plan.py
+
+      - name: Generate camera_plan.json (camera continuity for 11 chunks)
+        run: |
+          cd render_workspace
+          python cyp_camera_plan.py
+          cat camera_plan.json
+
+      - name: Render PREVIEW (segments 0-1) to validate framing
+        run: |
+          cd render_workspace
+          CYP_SEG_FROM=0 CYP_SEG_TO=1 python -m manim render CypherScene.py CypherScene -ql
+          PREV=$(find ./media -name "*.mp4" 2>/dev/null | grep -v partial_movie_files | head -1)
+          if [ -z "$PREV" ]; then echo "::error::no preview mp4 produced" && exit 1; fi
+          cp "$PREV" preview_chunk0.mp4
+          echo "[CHUNK0] preview → preview_chunk0.mp4"
+          ls -lh preview_chunk0.mp4 camera_plan.json
+
+      - name: Upload preview + camera_plan as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypher-chunk0-${{ inputs.run_id }}
+          path: |
+            render_workspace/preview_chunk0.mp4
+            render_workspace/camera_plan.json
+          retention-days: 7
+
+      - name: Publish preview + camera_plan to release (for the 11 chunks)
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          cd render_workspace
+          gh release upload "${{ inputs.run_id }}" preview_chunk0.mp4 camera_plan.json --repo ${{ github.repository }} --clobber
+          echo "[CHUNK0] ✅ Validation gate ready. Review preview_chunk0.mp4, then run 'CYPHER — Render 11 Chunks'."
