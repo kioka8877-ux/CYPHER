@@ -32,9 +32,7 @@ jobs:
           pip install --upgrade pip wheel
 
       - name: Install Manim + geo
-        run: |
-          pip install manim==0.20.1
-          pip install geopandas matplotlib contextily requests Pillow
+        run: pip install manim==0.20.1 geopandas matplotlib contextily requests Pillow
 
       - name: Download assets from release
         env:
@@ -43,6 +41,9 @@ jobs:
           mkdir -p ws && cd ws
           gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "render_spec_v2.json" --dir . || \
           gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "render_spec.json" --dir .
+          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "logos.zip" --dir .
+          mkdir -p logos && cd logos && unzip -o ../logos.zip && cd ..
+          echo "Logos:" && ls -lh logos/
           ls -lh
 
       - name: Copy scene files
@@ -77,4 +78,4 @@ jobs:
         run: |
           cd ws
           gh release upload "${{ inputs.run_id }}" preview_chunk0.mp4 camera_plan.json --repo ${{ github.repository }} --clobber
-          echo "✅ Preview ready. Download preview_chunk0.mp4, validate, then run Render All."
+          echo "✅ Preview ready. Download & validate, then run Render All."
