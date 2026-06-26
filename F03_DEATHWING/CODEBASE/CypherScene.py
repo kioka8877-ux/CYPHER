@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""CypherScene v7 — Carte monde unique + camera mobile + logos geolocalises."""
-import json, tempfile, math
+"""CypherScene v7.1 — Carte satellite + camera fluide + gros logos dans le pays."""
+import json, tempfile, math, os, time
 from pathlib import Path
 
 try:
@@ -8,25 +8,31 @@ try:
     config.pixel_width = 1080
     config.pixel_height = 1920
     config.frame_height = 8.0
-    config.frame_width = config.frame_height * 1080 / 1920
-    from manim import *
-except ImportError:
-    raise RuntimeError("manim non installe")
+    config.frame_width = 4.5
+    config.background_color = "#0a0a12"
+except Exception:
+    pass
 
-# ── Projection constants ──
-EXTENT = (-180, 180, -60, 85)  # lon_min, lon_max, lat_min, lat_max
-MAP_W = 24.0                   # Manim units width for the full map
-MAP_H = MAP_W * (EXTENT[3] - EXTENT[2]) / (EXTENT[1] - EXTENT[0])  # ~14.5
+from manim import (
+    Scene, MovingCameraScene, ImageMobject, Text, Square, Group,
+    FadeIn, FadeOut, ORIGIN, UP, DOWN, LEFT, RIGHT,
+    rate_functions, AnimationGroup
+)
+
+# ═══════════════════════════════════════════
+# GLOBALS — must match camera_plan generator
+# ═══════════════════════════════════════════
+EXTENT = (-180, 180, -60, 85)
+MAP_W = 24.0
+MAP_H = MAP_W * (EXTENT[3] - EXTENT[2]) / (EXTENT[1] - EXTENT[0]) * 1.2
 
 ISO2TO3 = {
-    "US":"USA","DE":"DEU","KR":"KOR","FR":"FRA","IT":"ITA","SE":"SWE",
-    "CN":"CHN","CA":"CAN","GB":"GBR","AE":"ARE","TW":"TWN","CH":"CHE",
-    "NL":"NLD","ES":"ESP","IN":"IND","AU":"AUS","SG":"SGP","FI":"FIN",
-    "DK":"DNK","BR":"BRA","JP":"JPN","NO":"NOR","IE":"IRL","IL":"ISR",
-    "ZA":"ZAF","MX":"MEX","TH":"THA","MY":"MYS","PH":"PHL","ID":"IDN",
-    "SA":"SAU","QA":"QAT","NZ":"NZL","CL":"CHL","AR":"ARG","CO":"COL",
-    "EG":"EGY","NG":"NGA","KE":"KEN","PL":"POL","CZ":"CZE","AT":"AUT",
-    "BE":"BEL","PT":"PRT","RO":"ROU","HU":"HUN","GR":"GRC","TR":"TUR",
+    "US":"USA","DE":"DEU","JP":"JPN","KR":"KOR","FR":"FRA","IT":"ITA",
+    "SE":"SWE","CN":"CHN","CA":"CAN","GB":"GBR","AE":"ARE","TW":"TWN",
+    "CH":"CHE","NL":"NLD","ES":"ESP","IN":"IND","AU":"AUS","SG":"SGP",
+    "FI":"FIN","DK":"DNK","BR":"BRA","MX":"MEX","SA":"SAU","NO":"NOR",
+    "TH":"THA","ID":"IDN","MY":"MYS","PH":"PHL","VN":"VNM","ZA":"ZAF",
+    "NG":"NGA","EG":"EGY","IL":"ISR","TR":"TUR",
 }
 
 
@@ -37,141 +43,127 @@ def geo_to_manim(lon, lat):
     return x, y
 
 
-def load_spec() -> dict:
-    for p in [Path("render_spec.json"), Path("../render_spec.json"),
-              Path("render_workspace/render_spec.json")]:
-        if p.exists():
-            return json.loads(p.read_text())
-    raise FileNotFoundError("render_spec.json introuvable")
-
-
-def _get_world():
-    import geopandas as gpd
-    try:
-        return gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
-    except Exception:
-        return gpd.read_file("https://naciscdn.org/naturalearth/110m/cultural/ne_110m_admin_0_countries.zip")
-
-
-def _iso_col(world):
-    for c in ["iso_a3", "ISO_A3", "ADM0_A3", "ISO_A3_EH"]:
-        if c in world.columns:
-            return c
-    return None
-
-
-def generate_base_map(out_path, w=4000, h=2400):
-    """Render one full world map — cinematic dark ocean + green land."""
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        world = _get_world()
-        fig, ax = plt.subplots(figsize=(w/100, h/100), dpi=100)
-        fig.patch.set_facecolor("#0a1628")
-        ax.set_facecolor("#0a1628")
-        # Land
-        world.plot(ax=ax, color="#1a3a2a", edgecolor="#2a5a3a", linewidth=0.4)
-        ax.set_xlim(EXTENT[0], EXTENT[1])
-        ax.set_ylim(EXTENT[2], EXTENT[3])
-        ax.set_axis_off()
-        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        plt.savefig(out_path, bbox_inches="tight", pad_inches=0, facecolor="#0a1628", dpi=100)
-        plt.close(fig)
-        return True
-    except Exception as e:
-        print(f"[MAP-BASE] {e}"); return False
-
-
-def generate_highlight(iso2, color, opacity, out_path, w=4000, h=2400):
-    """Render transparent overlay with just the highlighted country."""
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        from matplotlib.colors import to_rgba
-        world = _get_world()
-        ic = _iso_col(world)
-        iso3 = ISO2TO3.get(iso2.upper(), iso2.upper()) if iso2 else ""
-        if not iso3 or not ic:
-            return False
-        hi = world[world[ic] == iso3]
-        if hi.empty:
-            return False
-        fig, ax = plt.subplots(figsize=(w/100, h/100), dpi=100)
-        fig.patch.set_alpha(0)
-        ax.set_facecolor("none")
-        rgba = to_rgba(color, alpha=opacity)
-        hi.plot(ax=ax, color=rgba, edgecolor="#FFFFFF", linewidth=1.5)
-        ax.set_xlim(EXTENT[0], EXTENT[1])
-        ax.set_ylim(EXTENT[2], EXTENT[3])
-        ax.set_axis_off()
-        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
-        plt.savefig(out_path, bbox_inches="tight", pad_inches=0, transparent=True, dpi=100)
-        plt.close(fig)
-        return Path(out_path).stat().st_size > 500
-    except Exception as e:
-        print(f"[MAP-HI] {e}"); return False
-
-
-def get_country_bounds(iso2):
-    """Return (min_lon, min_lat, max_lon, max_lat) for scattering logos inside."""
-    try:
-        world = _get_world()
-        ic = _iso_col(world)
-        iso3 = ISO2TO3.get(iso2.upper(), iso2.upper())
-        hi = world[world[ic] == iso3]
-        if not hi.empty:
-            return hi.total_bounds  # (minx, miny, maxx, maxy)
-    except Exception:
-        pass
-    return None
-
-
-def dl_logo(url, path):
-    try:
-        import urllib.request
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            Path(path).write_bytes(resp.read())
-        return Path(path).stat().st_size > 800
-    except Exception as e:
-        print(f"[LOGO] {e}"); return False
-
-
-def safe_text(txt, sz, col, font):
-    for f in [font, "Impact", "DejaVu Sans"]:
-        if not f or "," in f:
-            continue
+def dl_logo(url, dest, retries=3):
+    """Download a logo with retries. Returns True on success."""
+    import requests
+    for attempt in range(retries):
         try:
-            return Text(txt, font_size=sz, color=col, font=f)
-        except Exception:
-            continue
-    return Text(txt, font_size=sz, color=col)
+            r = requests.get(url, timeout=12)
+            if r.status_code == 200 and len(r.content) > 500:
+                Path(dest).write_bytes(r.content)
+                return True
+        except Exception as e:
+            print(f"[LOGO] attempt {attempt+1}/{retries} failed for {url}: {e}")
+            time.sleep(1)
+    return False
 
 
-def scatter_positions(cx, cy, bounds, n):
-    """Generate n positions scattered within country bounds around centroid."""
-    if bounds is None or n == 0:
-        return [(cx, cy)] * n
-    minx, miny, maxx, maxy = bounds
-    # Convert bounds to manim
-    bx0, by0 = geo_to_manim(minx, miny)
-    bx1, by1 = geo_to_manim(maxx, maxy)
-    dx = (bx1 - bx0) * 0.3
-    dy = (by1 - by0) * 0.3
-    positions = []
-    # Spiral-ish scatter
-    angles = [i * 2.3998 for i in range(n)]  # golden angle
-    for i, a in enumerate(angles):
-        r = 0.3 + 0.15 * i
-        px = cx + math.cos(a) * min(dx, r)
-        py = cy + math.sin(a) * min(dy, r)
-        # Clamp within bounds
-        px = max(bx0 + 0.1, min(bx1 - 0.1, px))
-        py = max(by0 + 0.1, min(by1 - 0.1, py))
-        positions.append((px, py))
-    return positions
+def get_country_bounds(iso):
+    """Get country bounds from shapefile (minx,miny,maxx,maxy) in manim coords."""
+    try:
+        import geopandas as gpd
+        world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+        iso2 = iso.upper()
+        iso3 = ISO2TO3.get(iso2, iso2)
+        # Try iso_a3 first, then name matching
+        for col in ["iso_a3", "iso_a2"]:
+            if col in world.columns:
+                hi = world[world[col] == (iso3 if col == "iso_a3" else iso2)]
+                if not hi.empty:
+                    b = hi.total_bounds  # minx, miny, maxx, maxy
+                    x1, y1 = geo_to_manim(b[0], b[1])
+                    x2, y2 = geo_to_manim(b[2], b[3])
+                    return (x1, y1, x2, y2)
+    except Exception as e:
+        print(f"[BOUNDS] failed for {iso}: {e}")
+    return None
+
+
+def generate_base_map(out_path):
+    """Generate satellite world map using contextily Esri tiles."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import geopandas as gpd
+    import contextily as ctx
+
+    world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+    world = world.to_crs(epsg=4326)
+
+    fig, ax = plt.subplots(1, 1, figsize=(24, 14), dpi=150)
+    ax.set_xlim(EXTENT[0], EXTENT[1])
+    ax.set_ylim(EXTENT[2], EXTENT[3])
+
+    # Satellite basemap — Esri World Imagery
+    try:
+        ctx.add_basemap(ax, crs="EPSG:4326",
+                        source=ctx.providers.Esri.WorldImagery,
+                        zoom=3, attribution="")
+    except Exception as e:
+        print(f"[MAP] Esri tiles failed, fallback to CartoDB: {e}")
+        try:
+            ctx.add_basemap(ax, crs="EPSG:4326",
+                            source=ctx.providers.CartoDB.DarkMatter,
+                            zoom=3, attribution="")
+        except:
+            world.plot(ax=ax, color="#1a1a2e", edgecolor="#333", linewidth=0.3)
+
+    ax.set_axis_off()
+    fig.patch.set_facecolor("#0a0a12")
+    ax.patch.set_facecolor("#0a0a12")
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    fig.savefig(out_path, dpi=150, bbox_inches="tight", pad_inches=0,
+                facecolor="#0a0a12")
+    plt.close(fig)
+    print(f"[CYPHER] Base map saved: {out_path}")
+
+
+def generate_highlight(iso, out_path, fill_color="#baa0da", opacity=0.55):
+    """Generate a country highlight overlay as transparent PNG."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import geopandas as gpd
+    from matplotlib.colors import to_rgba
+
+    world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
+    iso3 = ISO2TO3.get(iso.upper(), iso.upper())
+
+    hi = None
+    for col in ["iso_a3"]:
+        if col in world.columns:
+            hi = world[world[col] == iso3]
+            if not hi.empty:
+                break
+    if hi is None or hi.empty:
+        print(f"[HIGHLIGHT] no shape for {iso}")
+        return False
+
+    fig, ax = plt.subplots(1, 1, figsize=(24, 14), dpi=150)
+    ax.set_xlim(EXTENT[0], EXTENT[1])
+    ax.set_ylim(EXTENT[2], EXTENT[3])
+
+    rgba = to_rgba(fill_color, alpha=opacity)
+    hi.plot(ax=ax, color=rgba, edgecolor="#FFFFFF", linewidth=1.5)
+
+    ax.set_axis_off()
+    fig.patch.set_alpha(0)
+    ax.patch.set_alpha(0)
+    plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+    fig.savefig(out_path, dpi=150, bbox_inches="tight", pad_inches=0,
+                transparent=True)
+    plt.close(fig)
+    return True
+
+
+def load_spec():
+    """Load render_spec — prefer v2 (split) if present."""
+    for name in ["render_spec_v2.json", "render_spec.json"]:
+        p = Path(name)
+        if p.exists():
+            print(f"[CYPHER] Using {name}")
+            return json.loads(p.read_text())
+    raise FileNotFoundError("No render_spec found")
 
 
 class CypherScene(MovingCameraScene):
@@ -182,8 +174,16 @@ class CypherScene(MovingCameraScene):
         display  = spec.get("display", {})
         map_conf = spec.get("map_config", {})
 
-        # ── v7 chunked rendering: segment range + camera plan ──
-        import os
+        raw_font = display.get("font", "DejaVu Sans")
+        font     = raw_font if raw_font else "DejaVu Sans"
+        sub_size = max(int(display.get("subtitle_size", 42)), 36)
+        vs       = float(display.get("visual_scale", 0.85))
+
+        cfill    = map_conf.get("country_fill", "#baa0da")
+        copacity = float(map_conf.get("country_opacity", 0.55))
+        fps      = int(meta.get("fps", 30))
+
+        # ── v7.1 chunked rendering: segment range + camera plan ──
         _last    = len(segments) - 1
         SEG_FROM = max(0, min(int(os.environ.get("CYP_SEG_FROM", "0")), max(_last, 0)))
         SEG_TO   = max(SEG_FROM, min(int(os.environ.get("CYP_SEG_TO", str(_last))), max(_last, 0)))
@@ -195,49 +195,46 @@ class CypherScene(MovingCameraScene):
             _plan = json.loads(Path("camera_plan.json").read_text())
             if SEG_FROM < len(_plan):
                 _cam_entry = _plan[SEG_FROM]
-        print(f"[CYPHER v7] segments {SEG_FROM}..{SEG_TO} T0={T0:.2f}s cam_entry={_cam_entry}")
-
-        raw_font = display.get("font", "DejaVu Sans")
-        font     = raw_font.split(",")[0].strip().strip("'").strip('"')
-        fcolor   = display.get("font_color", "#FFFFFF")
-        fsize    = max(int(display.get("font_size", 38)), 36)  # floor 36
-        pos      = display.get("position", "bottom")
-        vs       = float(display.get("visual_scale", 0.85))
-
-        cfill    = map_conf.get("country_fill", "#B30006")
-        copacity = float(map_conf.get("country_opacity", 0.45))
-        fps      = int(meta.get("fps", 30))
+        print(f"[CYPHER v7.1] segments {SEG_FROM}..{SEG_TO} T0={T0:.2f}s")
 
         tmp = Path(tempfile.mkdtemp())
 
         # ══════════════════════════════════════════════
-        # PHASE 1: Pre-render all images
+        # PHASE 1: Pre-render images
         # ══════════════════════════════════════════════
-        print("[CYPHER] Generating base world map...")
+        print("[CYPHER] Generating satellite world map (Esri)...")
         base_path = str(tmp / "base_map.png")
         generate_base_map(base_path)
 
-        print("[CYPHER] Generating country highlights...")
         highlight_paths = {}
-        for seg in segments:
+        for seg in _all_seg:
             iso = seg.get("iso", "")
             if iso and iso not in highlight_paths:
                 hp = str(tmp / f"hi_{iso}.png")
-                if generate_highlight(iso, cfill, copacity, hp):
+                if generate_highlight(iso, hp, cfill, copacity):
                     highlight_paths[iso] = hp
 
-        # ══════════════════════════════════════════════
-        # PHASE 2: Build Manim scene
-        # ════════════════════════════��═════════════════
-        print("[CYPHER] Building scene...")
+        # Pre-download ALL logos
+        logo_cache = {}
+        for seg in segments:
+            for bi, brand in enumerate(seg.get("brands", [])):
+                lurl = brand.get("logo", "")
+                lp = str(tmp / f"logo_{seg.get('id',0):02d}_{bi:02d}.png")
+                if lurl and dl_logo(lurl, lp):
+                    logo_cache[(seg.get("id",0), bi)] = lp
+                    print(f"[LOGO] ✅ {brand.get('name','?')}")
+                else:
+                    print(f"[LOGO] ❌ {brand.get('name','?')} — will use text fallback")
 
-        # Base map (always visible)
+        # ══════════════════════════════════════════════
+        # PHASE 2: Build scene
+        # ══════════════════════════════════════════════
         base_mob = ImageMobject(base_path)
         base_mob.set_width(MAP_W)
         base_mob.move_to(ORIGIN)
         self.add(base_mob)
 
-        # Camera start: world view (chunk0) OR resume previous chunk (camera plan)
+        # Camera start: world view (first chunk) OR resume (camera plan)
         if _cam_entry is not None:
             self.camera.frame.set_width(float(_cam_entry.get("width", MAP_W * 1.05)))
             _c = _cam_entry.get("center", [0, 0])
@@ -245,11 +242,11 @@ class CypherScene(MovingCameraScene):
         else:
             self.camera.frame.set_width(MAP_W * 1.05)
             self.camera.frame.move_to(ORIGIN)
-            self.wait(0.5)  # intro: hold full map view
+            self.wait(0.8)  # intro: hold full map view
 
         for i, seg in enumerate(segments):
             seg_start = float(seg.get("start", 0)) - T0
-            seg_end   = float(seg.get("end", float(seg.get("start", 0)) + 3)) - T0
+            seg_end   = float(seg.get("end", seg_start + 3)) - T0
             zoom_lvl  = float(seg.get("zoom", 5))
             text      = seg.get("text", "")
             lat       = float(seg.get("lat", 0))
@@ -257,117 +254,172 @@ class CypherScene(MovingCameraScene):
             iso       = seg.get("iso", "")
             brands    = seg.get("brands", [])
 
-            # Sync to absolute time
-            ct = self.renderer.time
-            if seg_start > ct + 0.05:
-                self.wait(seg_start - ct)
-
-            # Target position in Manim coords
             cx, cy = geo_to_manim(lon, lat)
 
-            # Zoom width: zoom 4=wide(8), 5=medium(6), 6=close(4.5), 7=tight(3.5)
+            # ── Sync to audio timeline ──
+            ct = self.renderer.time
+            wait_t = seg_start - ct
+            if wait_t > 0.05:
+                self.wait(wait_t)
+
+            # ══════════════════════════════════════════
+            # CAMERA TRAVEL — fluid "human-like" movement
+            # ══════════════════════════════════════════
             zoom_width = max(10.0 - zoom_lvl * 1.0, 3.0)
 
-            # ── Camera travel to country ──
             self.play(
                 self.camera.frame.animate.move_to([cx, cy, 0]).set(width=zoom_width),
-                run_time=0.8, rate_func=smooth
+                run_time=1.4 if i > 0 else 1.8,
+                rate_func=rate_functions.ease_in_out_cubic
+            )
+            # Micro-settle: tiny overshoot correction for natural feel
+            self.play(
+                self.camera.frame.animate.set(width=zoom_width * 0.98),
+                run_time=0.15,
+                rate_func=rate_functions.ease_out_sine
+            )
+            self.play(
+                self.camera.frame.animate.set(width=zoom_width),
+                run_time=0.1,
+                rate_func=rate_functions.ease_in_sine
             )
 
-            # ── Country highlight (illuminate) ──
+            # ── Country highlight (illuminate ~0.3s) ──
             hi_mob = None
             if iso in highlight_paths:
                 hi_mob = ImageMobject(highlight_paths[iso])
-                hi_mob.set_width(MAP_W)  # same scale as base
-                hi_mob.move_to(ORIGIN)   # same position as base
+                hi_mob.set_width(MAP_W)
+                hi_mob.move_to(ORIGIN)
                 self.play(FadeIn(hi_mob, run_time=0.3))
 
-            # ── Subtitle (anchored to camera viewport bottom) ──
-            sub = safe_text(text, fsize, fcolor, font)
+            # ── Subtitle ──
             cam_center = self.camera.frame.get_center()
             cam_h = self.camera.frame.height
-            sub_pos = cam_center + DOWN * cam_h * 0.42
-            sub.move_to(sub_pos)
-            # Scale subtitle to fit camera viewport width
-            cam_w = self.camera.frame.width
-            if sub.width > cam_w * 0.92:
-                sub.scale(cam_w * 0.92 / sub.width)
+            sub = Text(text, font=font, font_size=sub_size,
+                       color="#FFFFFF", weight="BOLD")
+            sub.set_max_width(self.camera.frame.width * 0.88)
+            sub.move_to(cam_center + DOWN * cam_h * 0.42)
             self.play(FadeIn(sub, run_time=0.25))
 
-            # ── Logos: one by one at word_frame, inside country ──
-            bounds = get_country_bounds(iso) if iso else None
-            positions = scatter_positions(cx, cy, bounds, len(brands))
+            # ══════════════════════════════════════════
+            # LOGOS — big, inside country, camera follows
+            # ══════════════════════════════════════════
             logo_mobs = []
 
-            for bi, brand in enumerate(brands):
-                wf = int(brand.get("word_frame", 0))
-                logo_time = wf / fps - T0
-                # Wait for word_frame
-                ct2 = self.renderer.time
-                if logo_time > ct2 + 0.08:
-                    self.wait(logo_time - ct2)
+            # Get country bounds for placement
+            bounds = get_country_bounds(iso) if iso else None
+            n_brands = len(brands)
 
-                # Build logo (SQUARE)
+            for bi, brand in enumerate(brands):
+                bname = brand.get("name", "").upper()[:12]
+                wf = brand.get("word_frame", 0)
+                logo_time = wf / fps - T0
+
+                # Wait for logo timing
+                ct2 = self.renderer.time
+                logo_wait = logo_time - ct2
+                if logo_wait > 0.1:
+                    self.wait(min(logo_wait, 2.0))
+
+                # Logo size: BIG relative to zoom (like target screenshot)
+                logo_sz = zoom_width * 0.30
+
+                # Position: scatter inside country bounds around center
+                if bounds and n_brands > 0:
+                    bx1, by1, bx2, by2 = bounds
+                    bcx = (bx1 + bx2) / 2
+                    bcy = (by1 + by2) / 2
+                    bw = abs(bx2 - bx1) * 0.35
+                    bh = abs(by2 - by1) * 0.35
+                    # Distribute brands evenly within bounds
+                    if n_brands == 1:
+                        px, py = bcx, bcy
+                    elif n_brands == 2:
+                        off = [-0.3, 0.3]
+                        px = bcx + bw * off[bi % 2]
+                        py = bcy + bh * off[(bi + 1) % 2]
+                    else:
+                        angle = (2 * math.pi * bi) / n_brands - math.pi / 2
+                        radius = min(bw, bh) * 0.5
+                        px = bcx + math.cos(angle) * radius
+                        py = bcy + math.sin(angle) * radius
+                else:
+                    px, py = cx, cy
+
+                # Try to use downloaded logo image
+                logo_key = (seg.get("id", 0), bi)
                 logo_mob = None
-                logo_sz = zoom_width * 0.08 * vs  # relative to current zoom
-                lp = str(tmp / f"logo_{i:02d}_{bi:02d}.png")
-                lurl = brand.get("logo", "")
-                if lurl and dl_logo(lurl, lp):
+
+                if logo_key in logo_cache:
                     try:
-                        li = ImageMobject(lp)
-                        li.scale_to_fit_height(logo_sz)
-                        if li.width > logo_sz:
-                            li.scale_to_fit_width(logo_sz)
-                        # Square white background
-                        side = max(li.width, li.height) + logo_sz * 0.15
+                        li = ImageMobject(logo_cache[logo_key])
+                        li.set_height(logo_sz)
+                        # White background card
+                        side = max(li.width, li.height) * 1.2
                         bg = Square(side_length=side,
-                                    fill_color="#FFFFFF", fill_opacity=1.0,
+                                    fill_color="#FFFFFF", fill_opacity=0.95,
                                     stroke_width=0)
-                        bg.round_corners(radius=side * 0.1)
-                        px, py = positions[bi]
                         bg.move_to([px, py, 0])
                         li.move_to(bg.get_center())
-                        logo_mob = VGroup(bg, li)
-                    except Exception:
-                        logo_mob = None
+                        logo_mob = Group(bg, li)
+                    except Exception as e:
+                        print(f"[LOGO] render failed {bname}: {e}")
 
+                # Fallback: big text label
                 if logo_mob is None:
-                    bname = brand.get("name", "").upper()[:10]
-                    side = logo_sz * 1.2
-                    bg = Square(side_length=side,
-                                fill_color="#FFFFFF", fill_opacity=1.0,
-                                stroke_width=0)
-                    bg.round_corners(radius=side * 0.1)
-                    px, py = positions[bi]
-                    bg.move_to([px, py, 0])
-                    bt = safe_text(bname, max(int(10 * vs), 7), "#050B08", font)
-                    bt.move_to(bg.get_center())
-                    if bt.width > side * 0.85:
-                        bt.scale(side * 0.85 / bt.width)
-                    logo_mob = VGroup(bg, bt)
+                    txt = Text(bname, font=font, font_size=52,
+                               color="#FFFFFF", weight="BOLD")
+                    txt.set_max_width(zoom_width * 0.6)
+                    txt.move_to([px, py, 0])
+                    logo_mob = txt
 
-                # Camera follows logo slightly
-                px, py = positions[bi]
-                self.play(
-                    FadeIn(logo_mob, shift=UP * 0.08, run_time=0.2),
-                    self.camera.frame.animate.move_to([px, py, 0]),
-                    run_time=0.25
-                )
-                # Update subtitle position (follows camera)
-                new_sub_pos = self.camera.frame.get_center() + DOWN * cam_h * 0.42
-                sub.move_to(new_sub_pos)
+                # Animate: fade in logo
+                self.play(FadeIn(logo_mob, run_time=0.35),
+                          rate_func=rate_functions.ease_out_sine)
                 logo_mobs.append(logo_mob)
 
-            # ── Hold remaining time ──
+                # Camera FOLLOWS the logo (zoom in slightly)
+                self.play(
+                    self.camera.frame.animate
+                        .move_to([px, py, 0])
+                        .set(width=zoom_width * 0.82),
+                    run_time=0.45,
+                    rate_func=rate_functions.ease_in_out_sine
+                )
+
+                # Update subtitle position to follow camera
+                new_sub_pos = self.camera.frame.get_center() + DOWN * self.camera.frame.height * 0.42
+                sub.move_to(new_sub_pos)
+
+                # Brief hold on logo
+                self.wait(0.25)
+
+                # Camera pulls back slightly before next logo
+                if bi < n_brands - 1:
+                    self.play(
+                        self.camera.frame.animate.set(width=zoom_width * 0.95),
+                        run_time=0.2,
+                        rate_func=rate_functions.ease_in_out_sine
+                    )
+
+            # ── Wait for segment end ──
             ct3 = self.renderer.time
             remaining = seg_end - ct3
             if remaining > 0.2:
                 self.wait(remaining * 0.6)
 
-            # ── Cleanup: fade out highlight + logos + subtitle ──
+            # ── Cleanup: fade out highlight + logos + sub ──
             fade_outs = [FadeOut(sub, run_time=0.3)]
             if hi_mob:
                 fade_outs.append(FadeOut(hi_mob, run_time=0.3))
             for lm in logo_mobs:
                 fade_outs.append(FadeOut(lm, run_time=0.3))
             self.play(*fade_outs)
+
+            # Camera pulls back to mid-range before next country
+            if i < len(segments) - 1:
+                self.play(
+                    self.camera.frame.animate.set(width=zoom_width * 1.3),
+                    run_time=0.4,
+                    rate_func=rate_functions.ease_in_out_sine
+                )
