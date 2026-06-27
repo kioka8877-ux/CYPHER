@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CypherScene v7.3 — Country fills 87% screen + logos inside + highlight fades on first logo."""
+"""CypherScene v7.4 — Country fills 87% screen + logos inside + highlight fades on first logo."""
 import json, tempfile, math, os, time, zipfile, io
 from pathlib import Path
 
@@ -229,7 +229,7 @@ class CypherScene(MovingCameraScene):
             if wait_t > 0.05:
                 self.wait(wait_t)
 
-            # ══════════ ZOOM = COUNTRY FILLS 87% OF SCREEN ══════════
+            # ══════════ ZOOM = COUNTRY FILLS 95% OF SCREEN ══════════
             bounds = get_country_bounds_manim(iso) if iso else None
             if bounds:
                 bx1, by1, bx2, by2 = bounds
@@ -237,17 +237,24 @@ class CypherScene(MovingCameraScene):
                 country_h = abs(by2 - by1)
                 bcx = (bx1 + bx2) / 2
                 bcy = (by1 + by2) / 2
-                # 9:16 aspect ratio: frame_width/frame_height = 4.5/8.0
-                aspect = 4.5 / 8.0
-                # Fit country to 87% of screen (whichever dimension is limiting)
-                zoom_by_w = country_w / 0.87
-                zoom_by_h = (country_h / 0.87) * aspect
-                zoom_width = max(zoom_by_w, zoom_by_h, 1.5)  # minimum 1.5
-                # Center on country centroid (not lat/lon from spec)
-                cx, cy = bcx, bcy
-                print(f"[CAM] {iso}: bounds w={country_w:.2f} h={country_h:.2f} -> zoom_width={zoom_width:.2f}")
+                # 9:16 aspect: visible_height = zoom_width * (8.0/4.5)
+                vis_h_ratio = 8.0 / 4.5
+                zoom_by_w = country_w / 0.95
+                zoom_by_h = country_h / (0.95 * vis_h_ratio)
+                zoom_width = max(zoom_by_w, zoom_by_h, 0.3)
+                # Countries with distant territories (US/Alaska, FR/DOM-TOM):
+                # if bounds are too wide, the centroid falls in the ocean.
+                # Cap zoom and use render_spec lat/lon as center instead.
+                if zoom_width > 3.5:
+                    print(f"[CAM] {iso}: bounds too wide ({country_w:.1f}x{country_h:.1f}), capping + using spec center")
+                    zoom_width = 3.5
+                    # cx, cy already set from render_spec lat/lon — keep them
+                else:
+                    # Use bounds centroid
+                    cx, cy = bcx, bcy
+                print(f"[CAM] {iso}: w={country_w:.2f} h={country_h:.2f} -> zoom={zoom_width:.2f} center=({cx:.2f},{cy:.2f})")
             else:
-                zoom_width = 4.0  # fallback
+                zoom_width = 2.5
 
             # ── Camera travel to country ──
             self.play(
