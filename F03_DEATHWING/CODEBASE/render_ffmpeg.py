@@ -10,7 +10,7 @@ import numpy as np
 
 # ── Config ──────────────────────────────────────────────
 FPS = 30
-WIDTH, HEIGHT = 1920, 1080
+WIDTH, HEIGHT = 1080, 1920
 TRANSITION_FRAMES = int(0.6 * FPS)   # 0.6s camera travel between countries
 LOGO_APPEAR_FRAMES = int(0.15 * FPS) # quick fade-in for logos (4-5 frames)
 
