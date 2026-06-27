@@ -1,0 +1,65 @@
+name: CYPHER — FFmpeg Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "CYPHER run_id"
+        required: true
+
+jobs:
+  chunk0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ffmpeg-pivot
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg fonts-dejavu-core
+          pip install Pillow numpy contextily geopandas
+
+      - name: Download assets from release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          mkdir -p ws && cd ws
+          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "render_spec_v2.json" --dir . || \
+          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "render_spec.json" --dir .
+          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "logos.zip" --dir .
+          mkdir -p logos && cd logos && unzip -o ../logos.zip && cd ..
+          echo "Logos: $(ls logos/ | wc -l)"
+          ls -lh
+
+      - name: Render PREVIEW (segments 0-1)
+        run: |
+          cd ${{ github.workspace }}
+          CYPHER_BASE=ws LOGO_DIR=ws/logos OUT_DIR=ws/out SEG_START=0 SEG_END=2 \
+            python3 F03_DEATHWING/CODEBASE/render_ffmpeg.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypher-ffmpeg-preview-${{ inputs.run_id }}
+          path: ws/out/*.mp4
+          retention-days: 7
+
+      - name: Publish to release
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          cd ws/out
+          for f in *.mp4; do
+            [ -f "$f" ] || continue
+            echo "Uploading $f"
+            gh release upload "${{ inputs.run_id }}" "$f" --repo ${{ github.repository }} --clobber || true
+          done
+          echo "✅ FFmpeg preview uploaded"
