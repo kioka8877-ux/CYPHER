@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CypherScene v7.4 — Country fills 87% screen + logos inside + highlight fades on first logo."""
+"""CypherScene v7.5 — Country fills 87% screen + logos inside + highlight fades on first logo."""
 import json, tempfile, math, os, time, zipfile, io
 from pathlib import Path
 
@@ -271,7 +271,7 @@ class CypherScene(MovingCameraScene):
                 hi_mob.move_to(ORIGIN)
                 self.play(FadeIn(hi_mob, run_time=0.3))
 
-            # ══════════ LOGOS ══════════
+            # ══════════ LOGOS — instant add + camera follow only ══════════
             logo_mobs = []
             n_brands = len(brands)
 
@@ -307,7 +307,7 @@ class CypherScene(MovingCameraScene):
                     angle = (2 * math.pi * bi) / n_brands if n_brands > 1 else 0
                     positions.append((cx + math.cos(angle) * 0.5, cy + math.sin(angle) * 0.5))
 
-            # Logo size relative to country on screen (~20% of country width)
+            # Logo size relative to country (~22%)
             if bounds:
                 logo_sz = max(min(bw, bh) * 0.22, 0.3)
             else:
@@ -325,14 +325,14 @@ class CypherScene(MovingCameraScene):
                 if logo_wait > 0.1:
                     self.wait(min(logo_wait, 2.5))
 
-                # ── Highlight DISAPPEARS when first logo appears ──
+                # Highlight DISAPPEARS when first logo appears
                 if bi == 0 and hi_mob is not None:
-                    self.play(FadeOut(hi_mob, run_time=0.25))
+                    self.remove(hi_mob)  # instant remove, no animation
                     hi_mob = None
 
                 px, py = positions[bi]
 
-                # Load logo from pre-downloaded dir
+                # Load logo
                 logo_mob = None
                 safe_domain = domain.replace("/", "_")
                 logo_file = logo_dir / f"{safe_domain}.png"
@@ -348,79 +348,48 @@ class CypherScene(MovingCameraScene):
                         li.move_to(bg.get_center())
                         logo_mob = Group(bg, li)
                     except Exception as e:
-                        print(f"[LOGO] render fail {bname}: {e}")
+                        print(f"[LOGO] fail {bname}: {e}")
 
-                # Fallback: styled text
                 if logo_mob is None:
                     txt = Text(bname, font=raw_font, font_size=44,
                                color="#FFFFFF", weight="BOLD")
                     txt.set_max_width(zoom_width * 0.4)
-                    bg = Rectangle(
-                        width=txt.width * 1.3, height=txt.height * 1.8,
-                        fill_color="#000000", fill_opacity=0.7, stroke_width=0)
+                    bg = Rectangle(width=txt.width*1.3, height=txt.height*1.8,
+                                   fill_color="#000000", fill_opacity=0.7, stroke_width=0)
                     bg.move_to([px, py, 0])
                     txt.move_to(bg.get_center())
                     logo_mob = Group(bg, txt)
 
-                # Fade in logo
-                self.play(FadeIn(logo_mob, run_time=0.35),
-                          rate_func=rate_functions.ease_out_sine)
+                # INSTANT add (no FadeIn animation — saves ~8s render per logo)
+                self.add(logo_mob)
                 logo_mobs.append(logo_mob)
 
-                # Camera follows logo (smooth pan within country)
-                follow_width = zoom_width * 0.75
+                # Camera follows logo — THE ONLY play() per logo
                 self.play(
                     self.camera.frame.animate
                         .move_to([px, py, 0])
-                        .set(width=follow_width),
-                    run_time=0.5,
+                        .set(width=zoom_width * 0.75),
+                    run_time=0.6,
                     rate_func=rate_functions.ease_in_out_sine
                 )
-                self.wait(0.2)
+                self.wait(0.15)
 
-                # Pull back to country view before next logo
-                if bi < n_brands - 1:
-                    self.play(
-                        self.camera.frame.animate
-                            .move_to([cx, cy, 0])
-                            .set(width=zoom_width),
-                        run_time=0.35,
-                        rate_func=rate_functions.ease_in_out_sine
-                    )
-
-            # ══════════ SUBTITLE — word by word synced ══════════
-            sub_mobs = []
-            words = text.split() if text else []
-            if words:
+            # ══════════ SUBTITLE — single text, instant ══════════
+            sub_mob = None
+            if text.strip():
                 cam_c = self.camera.frame.get_center()
                 cam_w_now = self.camera.frame.width
                 cam_h_now = self.camera.frame.height
+                sub = Text(text.strip(), font=raw_font, font_size=26,
+                           color="#FFFFFF", weight="BOLD")
+                sub.set_max_width(cam_w_now * 0.88)
+                sub_bg = Rectangle(width=sub.width*1.15, height=sub.height*2.0,
+                                   fill_color="#000000", fill_opacity=0.6, stroke_width=0)
                 sub_y = cam_c[1] - cam_h_now * 0.43
-
-                # Background bar for subtitles
-                sub_bg = Rectangle(
-                    width=cam_w_now * 0.95, height=cam_h_now * 0.08,
-                    fill_color="#000000", fill_opacity=0.6, stroke_width=0)
                 sub_bg.move_to([cam_c[0], sub_y, 0])
-                self.play(FadeIn(sub_bg, run_time=0.15))
-                sub_mobs.append(sub_bg)
-
-                # Words appear one by one
-                built_text = ""
-                for wi, word in enumerate(words):
-                    built_text += word + " "
-                    w_mob = Text(built_text.strip(), font=raw_font, font_size=26,
-                                 color="#FFFFFF", weight="BOLD")
-                    w_mob.set_max_width(cam_w_now * 0.88)
-                    w_mob.move_to([cam_c[0], sub_y, 0])
-                    if wi == 0:
-                        self.play(FadeIn(w_mob, run_time=0.1))
-                    else:
-                        # Remove previous, show updated
-                        self.remove(sub_mobs[-1] if len(sub_mobs) > 1 else sub_mobs[0])
-                        self.add(w_mob)
-                        self.wait(0.08)
-                    sub_mobs.append(w_mob)
+                sub.move_to([cam_c[0], sub_y, 0])
+                sub_mob = Group(sub_bg, sub)
+                self.add(sub_mob)  # instant
 
             # ── Wait for segment end ──
             ct3 = self.renderer.time
@@ -428,21 +397,18 @@ class CypherScene(MovingCameraScene):
             if remaining > 0.15:
                 self.wait(remaining * 0.5)
 
-            # ── Cleanup ──
-            fade_outs = []
+            # ── Cleanup: instant remove ──
             if hi_mob:
-                fade_outs.append(FadeOut(hi_mob, run_time=0.3))
+                self.remove(hi_mob)
             for lm in logo_mobs:
-                fade_outs.append(FadeOut(lm, run_time=0.3))
-            for sm in sub_mobs:
-                fade_outs.append(FadeOut(sm, run_time=0.2))
-            if fade_outs:
-                self.play(*fade_outs)
+                self.remove(lm)
+            if sub_mob:
+                self.remove(sub_mob)
 
-            # Pull back before next country
+            # Pull back before next country (only animated transition)
             if i < len(segments) - 1:
                 self.play(
                     self.camera.frame.animate.set(width=zoom_width * 1.4),
-                    run_time=0.4,
+                    run_time=0.3,
                     rate_func=rate_functions.ease_in_out_sine
                 )
