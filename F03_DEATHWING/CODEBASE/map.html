@@ -448,7 +448,7 @@ window.applyStateAtTime = function(t) {
       }
       if (activeIdx >= 0 && positions[activeIdx]) {
         camLon = lerp(seg.lon, positions[activeIdx][0], 0.2);
-        camLat = lerp(seg.lon, positions[activeIdx][1], 0.2);
+        camLat = lerp(seg.lat, positions[activeIdx][1], 0.2);
       }
     }
     map.jumpTo({ center: [camLon, camLat], zoom: targetZoom, pitch: 25, bearing: 0 });
