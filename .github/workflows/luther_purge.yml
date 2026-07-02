@@ -27,6 +27,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install FFmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
       - name: Télécharger vidéo source depuis release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
