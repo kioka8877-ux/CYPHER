@@ -302,15 +302,28 @@ window.applyStateAtTime = function(t) {
   if (!cypherData) return;
   const { segments, map_config, fps, allSegments } = cypherData;
 
-  // Find current segment
+  // Find current segment including any subsequent silence gaps (static extensions)
   let seg = null;
-  for (const s of segments) {
-    if (t >= s.start && t <= s.end) { seg = s; break; }
+  for (let i = 0; i < segments.length; i++) {
+    const s = segments[i];
+    const next = segments[i + 1];
+    const endLimit = next ? next.start : s.end;
+    if (t >= s.start && t < endLimit) {
+      seg = s;
+      break;
+    }
   }
-  // If between segments, find the next one (transition phase)
   if (!seg) {
-    for (const s of segments) {
-      if (t < s.start) { seg = s; break; }
+    // Fallback search in allSegments for single chunk renders
+    for (let i = 0; i < allSegments.length; i++) {
+      const s = allSegments[i];
+      const next = allSegments[i + 1];
+      const endLimit = next ? next.start : s.end;
+      if (t >= s.start && t < endLimit) {
+        // Find matching segment in current loaded segments
+        seg = segments.find(x => x.id === s.id);
+        break;
+      }
     }
   }
   if (!seg) seg = segments[segments.length - 1];
