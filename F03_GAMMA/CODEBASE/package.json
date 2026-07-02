@@ -1,0 +1,17 @@
+{
+  "name": "crusader-f03-sigismund",
+  "version": "1.0.0",
+  "description": "CRUSADER F03 SIGISMUND — Rendu Remotion → short_render.mp4",
+  "scripts": {
+    "render": "remotion render src/index.jsx CrusaderShort",
+    "render-beta": "remotion render src/index.jsx CrusaderBeta",
+    "studio": "remotion studio src/index.jsx"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.481",
+    "@remotion/gif": "4.0.481",
+    "remotion": "4.0.481",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  }
+}
