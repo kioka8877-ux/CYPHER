@@ -4,41 +4,67 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "ID de production (ex: cyp_20260621_1200)"
+        description: "ID de production (ex: CYP_20260622_0854)"
         required: true
       production_date:
         description: "Date production YYYY-MM-DD (pour normalisation timestamp)"
         required: true
+      input_file:
+        description: "Fichier source à purger"
+        required: true
+        default: "cypher_final.mp4"
+
+permissions:
+  contents: write
 
 jobs:
   luther:
     name: Strip empreinte zéro
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install FFmpeg
-        uses: FedericoCarboni/setup-ffmpeg@v3
-
-      - name: Télécharger youtube_final.mp4 depuis release
+      - name: Télécharger vidéo source depuis release
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="cyp-${{ github.event.inputs.run_id }}"
+          TAG="${{ github.event.inputs.run_id }}"
+          INPUT="${{ github.event.inputs.input_file }}"
           mkdir -p /tmp/luther_in /tmp/luther_out
           gh release download "$TAG" \
             --repo ${{ github.repository }} \
-            --pattern "youtube_final.mp4" \
+            --pattern "$INPUT" \
             --dir /tmp/luther_in
-          echo "[LUTHER] $(du -h /tmp/luther_in/youtube_final.mp4 | cut -f1)"
+          echo "[LUTHER] Source: $(du -h /tmp/luther_in/$INPUT | cut -f1)"
+
+      - name: Audit pré-strip
+        run: |
+          INPUT="${{ github.event.inputs.input_file }}"
+          echo "[LUTHER] Audit pré-strip:"
+          ffprobe -v quiet -print_format json -show_format /tmp/luther_in/$INPUT \
+            | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)
+          tags = d.get('format', {}).get('tags', {})
+          if tags:
+              for k, v in tags.items():
+                  print(f'  {k} = {v!r}')
+              suspects = ['remotion','manim','ffmpeg','lavf','lavc','libav','python','claude','gumloop','maplibre','playwright']
+              found = [k for k,v in tags.items() if any(s in (k+' '+str(v)).lower() for s in suspects)]
+              if found:
+                  print(f'  ⚠️ Tags suspects: {found}')
+          else:
+              print('  (aucun tag)')
+          "
 
       - name: Strip métadonnées — empreinte zéro
         run: |
+          INPUT="${{ github.event.inputs.input_file }}"
           ffmpeg -y \
-            -i /tmp/luther_in/youtube_final.mp4 \
+            -i /tmp/luther_in/$INPUT \
             -c copy \
             -map_metadata -1 \
             -fflags +bitexact \
@@ -55,18 +81,18 @@ jobs:
         run: |
           TAGS=$(ffprobe -v quiet -print_format json -show_format /tmp/luther_out/clean_final.mp4 \
             | python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps(d.get('format',{}).get('tags',{})))")
-          echo "Tags résiduels : $TAGS"
+          echo "Tags résiduels: $TAGS"
           SUSPICIOUS=$(echo "$TAGS" | python3 -c "
           import json,sys
           tags=json.load(sys.stdin)
-          suspects=['remotion','manim','ffmpeg','lavf','lavc','libav','python','claude']
+          suspects=['remotion','manim','ffmpeg','lavf','lavc','libav','python','claude','gumloop','maplibre','playwright']
           found=[k for k,v in tags.items() if any(s in (k+' '+str(v)).lower() for s in suspects)]
           print(','.join(found))
           ")
           if [ -n "$SUSPICIOUS" ]; then
-            echo "[LUTHER] ECHEC tags suspects : $SUSPICIOUS"; exit 1
+            echo "[LUTHER] ECHEC tags suspects: $SUSPICIOUS"; exit 1
           fi
-          echo "[LUTHER] Empreinte zéro confirmée"
+          echo "[LUTHER] ✅ Empreinte zéro confirmée"
 
       - name: Vérifier intégrité
         run: |
@@ -76,9 +102,9 @@ jobs:
 
       - name: Upload clean_final.mp4 sur release
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="cyp-${{ github.event.inputs.run_id }}"
+          TAG="${{ github.event.inputs.run_id }}"
           gh release upload "$TAG" \
             --repo ${{ github.repository }} \
             /tmp/luther_out/clean_final.mp4 \
