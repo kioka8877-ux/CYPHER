@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1080, height=1920">
-<title>CYPHER DEATHWING v9.0</title>
+<title>CYPHER DEATHWING v9.5</title>
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
@@ -49,13 +49,19 @@
 <script>
 'use strict';
 
-// ═══ GLOBALS ═══
+// ══════════════════════════════════════════════════════════════
+// GLOBALS
+// ══════════════════════════════════════════════════════════════
 let map, cypherData, countryFeatures = {};
 let currentMarkers = [], currentHighlightId = null;
 window.mapReady = false;
 window.cypherReady = false;
 
-// ═══ MAP INIT ═══
+const TRANSITION_DURATION = 0.8; // Single source of truth — snappy camera move
+
+// ══════════════════════════════════════════════════════════════
+// MAP INIT
+// ══════════════════════════════════════════════════════════════
 map = new maplibregl.Map({
   container: 'map',
   style: {
@@ -81,7 +87,9 @@ map.on('load', () => {
   window.mapReady = true;
 });
 
-// ═══ ISO MAPPING ═══
+// ══════════════════════════════════════════════════════════════
+// ISO MAPPING
+// ══════════════════════════════════════════════════════════════
 const ISO2TO3 = {
   US:'USA',DE:'DEU',JP:'JPN',KR:'KOR',FR:'FRA',IT:'ITA',SE:'SWE',
   CN:'CHN',CA:'CAN',GB:'GBR',AE:'ARE',TW:'TWN',CH:'CHE',NL:'NLD',
@@ -92,27 +100,25 @@ const ISO2TO3 = {
   PT:'PRT',HU:'HUN',RO:'ROU',BG:'BGR',HR:'HRV',AT:'AUT',BE:'BEL'
 };
 
-// ═══ EASING ═══
+// ══════════════════════════════════════════════════════════════
+// EASING
+// ══════════════════════════════════════════════════════════════
 function easeInOutCubic(t) {
   return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3) / 2;
 }
 function lerp(a, b, t) { return a + (b-a) * t; }
 
-// ═══ INIT CYPHER ═══
+// ══════════════════════════════════════════════════════════════
+// INIT CYPHER
+// ══════════════════════════════════════════════════════════════
 window.initCypher = function(data) {
   cypherData = data;
   const { geojson, map_config, display, segments } = data;
 
-  // Add country source
   map.addSource('countries', { type: 'geojson', data: geojson });
 
-  // Index country features by ISO3
-  const isoCol = geojson.features[0]?.properties?.ISO_A3 !== undefined ? 'ISO_A3'
-    : geojson.features[0]?.properties?.ISO_A3_EH !== undefined ? 'ISO_A3_EH'
-    : 'ADM0_A3';
-
+  // Index country features by ALL ISO columns
   for (const feat of geojson.features) {
-    // Index by ALL possible ISO codes for robust lookup
     const codes = [
       feat.properties['ISO_A3'],
       feat.properties['ISO_A3_EH'],
@@ -121,25 +127,21 @@ window.initCypher = function(data) {
     for (const code of codes) {
       if (!countryFeatures[code]) countryFeatures[code] = feat;
     }
-    // Also index by ISO_A2 if available
     const a2 = feat.properties['ISO_A2'] || feat.properties['ISO_A2_EH'];
     if (a2 && a2 !== '-99' && !countryFeatures[ISO2TO3[a2]]) {
       countryFeatures[a2] = feat;
     }
   }
 
-  // Pre-calculate bounds for each segment
+  // Pre-calculate bounds & zoom for each segment
   for (const seg of segments) {
     const iso3 = ISO2TO3[seg.iso] || seg.iso;
     const feat = countryFeatures[iso3];
     if (feat) {
       const bounds = getFeatureBounds(feat);
-      // Cap for territories (Alaska, DOM-TOM)
       const lonSpan = Math.min(bounds.lonSpan, 60);
       const latSpan = Math.min(bounds.latSpan, 40);
       seg._bounds = { ...bounds, lonSpan, latSpan };
-      // Calculate MapLibre zoom for 95% fill (vertical viewport 1080x1920)
-      // Width is constraining: lonSpan at zoom Z covers 360/2^Z * 256/1080 * tileSize
       const targetLonSpan = lonSpan / 0.95;
       seg._mlZoom = Math.log2(360 / targetLonSpan) + 2.0;
       seg._mlZoom = Math.max(3, Math.min(seg._mlZoom, 14));
@@ -147,12 +149,16 @@ window.initCypher = function(data) {
       seg._mlZoom = seg.zoom || 4;
       seg._bounds = null;
     }
-  }
 
-  // Apply display styles to subtitle container
-  const sc = document.getElementById('subtitle-container');
-  if (display.font_color) {
-    document.querySelectorAll('.subtitle-word').forEach(w => w.style.color = display.font_color);
+    // Pre-sort brands by word_frame for chronological processing
+    if (seg.brands) {
+      seg._brandsSorted = [...seg.brands].sort((a, b) => a.word_frame - b.word_frame);
+      seg._firstBrandTime = seg._brandsSorted.length > 0
+        ? seg._brandsSorted[0].word_frame / data.fps : Infinity;
+    } else {
+      seg._brandsSorted = [];
+      seg._firstBrandTime = Infinity;
+    }
   }
 
   window.cypherReady = true;
@@ -171,15 +177,15 @@ function getFeatureBounds(feat) {
            cx: (minLon+maxLon)/2, cy: (minLat+maxLat)/2 };
 }
 
-// ═══ HIGHLIGHT ═══
+// ══════════════════════════════════════════════════════════════
+// HIGHLIGHT
+// ══════════════════════════════════════════════════════════════
 function showHighlight(iso2, color, opacity) {
   const iso3 = ISO2TO3[iso2] || iso2;
   if (currentHighlightId === iso3) return;
   clearHighlight();
   currentHighlightId = iso3;
 
-  // Build robust filter: match ANY known ISO column
-  // Natural Earth uses ISO_A3, ISO_A3_EH, or ADM0_A3 depending on country
   const f = ['any',
     ['==', ['get', 'ISO_A3'], iso3],
     ['==', ['get', 'ISO_A3_EH'], iso3],
@@ -188,24 +194,16 @@ function showHighlight(iso2, color, opacity) {
     ['==', ['get', 'ISO_A2_EH'], iso2]
   ];
 
-  // Fill — country color with visible opacity
   map.addLayer({
-    id: 'cy-fill', type: 'fill', source: 'countries',
-    filter: f,
+    id: 'cy-fill', type: 'fill', source: 'countries', filter: f,
     paint: { 'fill-color': color || '#baa0da', 'fill-opacity': opacity || 0.55 }
   });
-
-  // Glow — wide blurred white line for outer glow effect
   map.addLayer({
-    id: 'cy-glow', type: 'line', source: 'countries',
-    filter: f,
+    id: 'cy-glow', type: 'line', source: 'countries', filter: f,
     paint: { 'line-color': color || '#baa0da', 'line-width': 12, 'line-blur': 8, 'line-opacity': 0.6 }
   });
-
-  // Sharp border — white outline
   map.addLayer({
-    id: 'cy-border', type: 'line', source: 'countries',
-    filter: f,
+    id: 'cy-border', type: 'line', source: 'countries', filter: f,
     paint: { 'line-color': '#ffffff', 'line-width': 2.5 }
   });
 }
@@ -217,7 +215,9 @@ function clearHighlight() {
   currentHighlightId = null;
 }
 
-// ═══ LOGOS ═══
+// ══════════════════════════════════════════════════════════════
+// LOGOS
+// ══════════════════════════════════════════════════════════════
 function clearLogos() {
   currentMarkers.forEach(m => m.remove());
   currentMarkers = [];
@@ -243,7 +243,7 @@ function addLogoMarker(brand, position) {
   const el = document.createElement('div');
   el.className = 'brand-marker visible';
   if (brand._logo_abs) {
-    el.innerHTML = '<img src="' + brand._logo_abs + '" onerror="this.parentNode.innerHTML=\'<div class=fallback-text>' + brand.name + '</div>\'">';
+    el.innerHTML = '<img src="' + brand._logo_abs + '" onerror="this.parentNode.innerHTML=\'<div class=fallback-text>' + brand.name + '</div>\'\"">';
   } else {
     el.innerHTML = '<div class="fallback-text">' + brand.name + '</div>';
   }
@@ -254,12 +254,15 @@ function addLogoMarker(brand, position) {
   return marker;
 }
 
-// ═══ SUBTITLES ═══
+// ══════════════════════════════════════════════════════════════
+// SUBTITLES — v9.5 REWRITE (fixes desync)
+// ══════════════════════════════════════════════════════════════
 function clearSubtitles() {
-  document.getElementById('subtitle-container').innerHTML = '';
+  const c = document.getElementById('subtitle-container');
+  c.innerHTML = '';
+  c.dataset.textKey = '';
 }
 
-// ═══ PRECISION SUBTITLES SYNCHRONIZER ═══
 function updateSubtitles(seg, timeS, fps) {
   const container = document.getElementById('subtitle-container');
   if (!seg.brands || !seg.brands.length) {
@@ -267,119 +270,143 @@ function updateSubtitles(seg, timeS, fps) {
     return;
   }
 
-  // 1. Extract only the portion of the text relevant to this segment's country & brands.
-  // Since seg.text contains redundant sentences from adjacent segments, we parse and display
-  // only the phrase matching the current country.
-  // e.g. "Spain has Zara, Santander, and SEAT."
-  const countryName = seg.country.toLowerCase();
-  const sentences = (seg.text || '').split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
+  // 1. Use full segment text (render_spec_v2 = 1 country per segment, text is clean)
+  const fullText = (seg.text || '').trim();
+  if (!fullText) return;
 
-  let targetSentence = "";
-  for (const s of sentences) {
-    if (s.toLowerCase().includes(countryName) || 
-        seg.brands.some(b => s.toLowerCase().includes(b.name.toLowerCase()))) {
-      targetSentence = s + ".";
-      break;
-    }
-  }
-
-  if (!targetSentence) {
-    // Fallback: use first sentence
-    targetSentence = sentences[0] || seg.text;
-  }
-
-  const words = targetSentence.split(/\s+/).filter(Boolean);
+  const words = fullText.split(/\s+/).filter(Boolean);
   if (!words.length) return;
 
-  // 2. Build elements if segment changed or text differs
-  const textKey = seg.id + '_' + targetSentence;
+  // 2. Build DOM elements only on segment change
+  const textKey = 'seg_' + seg.id;
   if (container.dataset.textKey !== textKey) {
     container.dataset.textKey = textKey;
     container.innerHTML = '';
-    const fc = cypherData.display.font_color || '#a3f609';
-    words.forEach((w, i) => {
+    const fc = (cypherData.display && cypherData.display.font_color) || '#a3f609';
+    for (const w of words) {
       const span = document.createElement('span');
       span.className = 'subtitle-word';
       span.textContent = w;
       span.style.color = fc;
       container.appendChild(span);
-    });
+    }
   }
 
-  // 3. Map words to exact time.
-  // Since some words are brands, we sync those EXACTLY to the brand word_frame.
-  // Non-brand words are interpolated between the brand timestamps.
-  const wordTimes = new Array(words.length).fill(seg.start);
+  // 3. Calculate per-word timing using brand word_frames as anchors
+  //    FIX: Use -1 sentinel (never collides with real time)
+  //    FIX: Clean forward-pass interpolation (no loop variable mutation)
+  //    FIX: Strict brand matching (no includes() false positives)
+  const UNSET = -1;
+  const wordTimes = new Array(words.length).fill(UNSET);
 
-  // Find brand indices in our parsed sentence
-  seg.brands.forEach(b => {
+  // Sort brands chronologically for reliable matching
+  const sortedBrands = seg._brandsSorted || [...seg.brands].sort((a, b) => a.word_frame - b.word_frame);
+
+  // Match each brand to its word position
+  for (const b of sortedBrands) {
     const brandTime = b.word_frame / fps;
-    const nameLower = b.name.toLowerCase();
+    // Handle multi-word brands: split on spaces and hyphens for matching
+    const brandParts = b.name.toLowerCase().replace(/['']/g, '').split(/[\s-]+/);
+    const firstPart = brandParts[0].replace(/[^a-z0-9]/g, '');
+    if (!firstPart) continue;
 
-    // Find matching word index
+    // Find first UNMATCHED word that matches this brand
     for (let i = 0; i < words.length; i++) {
-      const wordClean = words[i].toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (wordClean === nameLower || nameLower.includes(wordClean)) {
+      if (wordTimes[i] !== UNSET) continue; // skip already-matched words
+      const wClean = words[i].toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!wClean) continue;
+
+      // Strict matching: exact match, or prefix match only if both sides are 4+ chars
+      const isMatch = (wClean === firstPart) ||
+        (firstPart.length >= 4 && wClean.length >= 4 && (
+          wClean.startsWith(firstPart) || firstPart.startsWith(wClean)
+        ));
+
+      if (isMatch) {
         wordTimes[i] = brandTime;
+        // Mark subsequent words of multi-word brands (e.g. "British" "Airways")
+        for (let w = 1; w < brandParts.length && (i + w) < words.length; w++) {
+          if (wordTimes[i + w] === UNSET) {
+            wordTimes[i + w] = brandTime + 0.05 * w;
+          }
+        }
         break;
       }
     }
-  });
+  }
 
-  // Interpolate times of non-brand words between brand timestamps
-  let lastKnownTime = seg.start;
+  // 4. Anchor endpoints
+  if (wordTimes[0] === UNSET) wordTimes[0] = seg.start;
+  if (wordTimes[words.length - 1] === UNSET) {
+    wordTimes[words.length - 1] = Math.min(seg.end - 0.05, 
+      (sortedBrands.length > 0 ? sortedBrands[sortedBrands.length - 1].word_frame / fps + 0.3 : seg.end - 0.05));
+  }
+
+  // 5. Forward-pass interpolation: fill gaps between known timestamps
+  //    FIX: clean loop, no i mutation, no i-- hack
+  let prevIdx = -1;
   for (let i = 0; i < words.length; i++) {
-    if (wordTimes[i] === seg.start && i > 0) {
-      // Find next known brand timestamp
-      let nextKnownIdx = -1;
-      for (let j = i + 1; j < words.length; j++) {
-        if (wordTimes[j] !== seg.start) { nextKnownIdx = j; break; }
+    if (wordTimes[i] !== UNSET) {
+      // Found a known timestamp — interpolate gap from prevIdx+1 to i-1
+      if (prevIdx >= 0 && i - prevIdx > 1) {
+        const startT = wordTimes[prevIdx];
+        const endT = wordTimes[i];
+        const gap = i - prevIdx;
+        for (let j = prevIdx + 1; j < i; j++) {
+          wordTimes[j] = startT + (endT - startT) * (j - prevIdx) / gap;
+        }
       }
-      const nextTime = nextKnownIdx !== -1 ? wordTimes[nextKnownIdx] : seg.end;
-      const count = (nextKnownIdx !== -1 ? nextKnownIdx : words.length) - i + 1;
-      // Linearly space the intermediate non-brand words
-      for (let k = 0; i < (nextKnownIdx !== -1 ? nextKnownIdx : words.length); i++, k++) {
-        wordTimes[i] = lastKnownTime + ((nextTime - lastKnownTime) * (k + 1) / count);
-      }
-      i--; // adjust index after loop
-    } else {
-      lastKnownTime = wordTimes[i];
+      prevIdx = i;
     }
   }
 
-  // Reveal words on screen at their precise calculated time
-  container.querySelectorAll('.subtitle-word').forEach((el, i) => {
-    el.classList.toggle('visible', timeS >= wordTimes[i]);
-  });
+  // Fill any remaining UNSET at the tail
+  if (prevIdx >= 0 && prevIdx < words.length - 1) {
+    const startT = wordTimes[prevIdx];
+    const endT = seg.end;
+    const gap = words.length - prevIdx;
+    for (let j = prevIdx + 1; j < words.length; j++) {
+      wordTimes[j] = startT + (endT - startT) * (j - prevIdx) / gap;
+    }
+  }
+
+  // Safety: any still UNSET gets linear spacing from seg.start to seg.end
+  for (let i = 0; i < words.length; i++) {
+    if (wordTimes[i] === UNSET) {
+      wordTimes[i] = seg.start + (seg.end - seg.start) * i / words.length;
+    }
+  }
+
+  // 6. Reveal words at their calculated time
+  const spans = container.querySelectorAll('.subtitle-word');
+  for (let i = 0; i < spans.length && i < wordTimes.length; i++) {
+    spans[i].classList.toggle('visible', timeS >= wordTimes[i]);
+  }
 }
 
-// ═══ STATE MACHINE ═══
+// ══════════════════════════════════════════════════════════════
+// STATE MACHINE — v9.5
+// ══════════════════════════════════════════════════════════════
 let _prevSegId = -1;
-const TRANSITION_DURATION = 1.4;
 
 window.applyStateAtTime = function(t) {
   if (!cypherData) return;
   const { segments, map_config, fps, allSegments } = cypherData;
 
-  // Find current segment including any subsequent silence gaps (static extensions)
+  // ── Find current segment (including gap frames) ──
   let seg = null;
   for (let i = 0; i < segments.length; i++) {
     const s = segments[i];
     const next = segments[i + 1];
     const endLimit = next ? next.start : s.end;
-    if (t >= s.start && t < endLimit) {
-      seg = s;
-      break;
-    }
+    if (t >= s.start && t < endLimit) { seg = s; break; }
   }
-  if (!seg) {
-    // Fallback search in allSegments for single chunk renders
+  if (!seg && allSegments) {
     for (let i = 0; i < allSegments.length; i++) {
       const s = allSegments[i];
       const next = allSegments[i + 1];
       const endLimit = next ? next.start : s.end;
       if (t >= s.start && t < endLimit) {
-        // Find matching segment in current loaded segments
         seg = segments.find(x => x.id === s.id);
         break;
       }
@@ -387,7 +414,7 @@ window.applyStateAtTime = function(t) {
   }
   if (!seg) seg = segments[segments.length - 1];
 
-  // Find previous segment (for camera transition)
+  // ── Previous segment (for camera transition origin) ──
   const segIdx = segments.indexOf(seg);
   const prevSeg = segIdx > 0 ? segments[segIdx - 1]
     : (allSegments && seg.id > 0 ? allSegments.find(s => s.id === seg.id - 1) : null);
@@ -395,10 +422,7 @@ window.applyStateAtTime = function(t) {
   const timeInSeg = t - seg.start;
   const targetZoom = seg._mlZoom || 4;
 
-  // ── CAMERA TRANSITION (Runs continuously) ──
-  const TRANSITION_DURATION = 0.8; // Snappier transition (0.8s) for faster centering
-  let camLon = seg.lon, camLat = seg.lat;
-
+  // ══ CAMERA ══
   if (timeInSeg < TRANSITION_DURATION && timeInSeg >= 0) {
     const from = prevSeg
       ? { lon: prevSeg.lon, lat: prevSeg.lat, zoom: prevSeg._mlZoom || 4 }
@@ -411,7 +435,8 @@ window.applyStateAtTime = function(t) {
       bearing: 0
     });
   } else {
-    // Static phase — camera on country with micro-pan toward active logo
+    // Static phase — micro-pan toward active logo
+    let camLon = seg.lon, camLat = seg.lat;
     if (seg.brands && seg.brands.length > 0 && seg._bounds) {
       const rLon = Math.min(seg._bounds.lonSpan * 0.15, 12);
       const rLat = Math.min(seg._bounds.latSpan * 0.15, 8);
@@ -422,17 +447,16 @@ window.applyStateAtTime = function(t) {
         if (t >= seg.brands[i].word_frame / fps) { activeIdx = i; break; }
       }
       if (activeIdx >= 0 && positions[activeIdx]) {
-        const lp = positions[activeIdx];
-        camLon = lerp(seg.lon, lp[0], 0.2);
-        camLat = lerp(seg.lat, lp[1], 0.2);
+        camLon = lerp(seg.lon, positions[activeIdx][0], 0.2);
+        camLat = lerp(seg.lon, positions[activeIdx][1], 0.2);
       }
     }
     map.jumpTo({ center: [camLon, camLat], zoom: targetZoom, pitch: 25, bearing: 0 });
   }
 
-  // ── OVERLAYS (Decoupled from camera state — always render on time!) ──
+  // ══ OVERLAYS (decoupled from camera — always synced to absolute time!) ══
 
-  // Segment change cleanup
+  // Segment change → cleanup
   if (_prevSegId !== seg.id) {
     clearHighlight();
     clearLogos();
@@ -441,22 +465,26 @@ window.applyStateAtTime = function(t) {
   }
 
   // ── HIGHLIGHT ──
-  const firstBrandTime = (seg.brands && seg.brands.length > 0)
-    ? seg.brands[0].word_frame / fps : Infinity;
-  // Ensure highlight shows at start of segment, hides once the first logo pops
-  if (t >= seg.start && t < Math.max(firstBrandTime, seg.start + 0.3)) {
+  // FIX v9.5: appears as camera approaches (~40% through transition),
+  //           disappears when first logo appears (but stays ≥0.3s after transition ends)
+  const transEnd = seg.start + TRANSITION_DURATION;
+  const highlightStart = seg.start + TRANSITION_DURATION * 0.4;
+  const highlightEnd = Math.max(transEnd + 0.3, seg._firstBrandTime || Infinity);
+  // Cap: highlight should not persist longer than 2s into the segment
+  const highlightMaxEnd = Math.min(highlightEnd, seg.start + 2.0);
+
+  if (t >= highlightStart && t < highlightMaxEnd) {
     showHighlight(seg.iso, map_config.country_color, map_config.country_opacity);
   } else {
     clearHighlight();
   }
 
-  // ── LOGOS ──
+  // ── LOGOS (appear at exact word_frame time, decoupled from transition) ──
   if (seg.brands && seg._bounds) {
     const rLon = Math.min(seg._bounds.lonSpan * 0.15, 12);
     const rLat = Math.min(seg._bounds.latSpan * 0.15, 8);
     const positions = scatterPositions(seg.brands.length, seg.lon, seg.lat, rLon, rLat);
 
-    // Count how many logos should be visible based on absolute time
     const visibleCount = seg.brands.filter(b => t >= b.word_frame / fps).length;
     if (currentMarkers.length < visibleCount) {
       for (let i = currentMarkers.length; i < visibleCount; i++) {
@@ -465,7 +493,7 @@ window.applyStateAtTime = function(t) {
     }
   }
 
-  // ── SUBTITLES ──
+  // ── SUBTITLES (word-by-word, synced to word_frames) ──
   updateSubtitles(seg, t, fps);
 };
 </script>
