@@ -323,32 +323,26 @@ window.applyStateAtTime = function(t) {
   const timeInSeg = t - seg.start;
   const targetZoom = seg._mlZoom || 4;
 
-  // ── CAMERA ──
+  // ── CAMERA TRANSITION (Runs continuously) ──
+  const TRANSITION_DURATION = 0.8; // Snappier transition (0.8s) for faster centering
+  let camLon = seg.lon, camLat = seg.lat;
+
   if (timeInSeg < TRANSITION_DURATION && timeInSeg >= 0) {
-    // Transition phase
     const from = prevSeg
       ? { lon: prevSeg.lon, lat: prevSeg.lat, zoom: prevSeg._mlZoom || 4 }
       : { lon: 0, lat: 20, zoom: 1.5 };
-    const progress = easeInOutCubic(Math.max(0, timeInSeg) / TRANSITION_DURATION);
+    const progress = easeInOutCubic(timeInSeg / TRANSITION_DURATION);
     map.jumpTo({
       center: [lerp(from.lon, seg.lon, progress), lerp(from.lat, seg.lat, progress)],
       zoom: lerp(from.zoom, targetZoom, progress),
       pitch: lerp(prevSeg ? 25 : 0, 25, progress),
       bearing: 0
     });
-    // Clear visuals during transition
-    if (_prevSegId !== seg.id) {
-      clearHighlight(); clearLogos(); clearSubtitles();
-      _prevSegId = seg.id;
-    }
   } else {
-    // Static phase — camera on country
-    let camLon = seg.lon, camLat = seg.lat;
-
-    // Micro-pan toward active logo
+    // Static phase — camera on country with micro-pan toward active logo
     if (seg.brands && seg.brands.length > 0 && seg._bounds) {
-      const rLon = Math.min(seg._bounds.lonSpan * 0.2, 15);
-      const rLat = Math.min(seg._bounds.latSpan * 0.2, 10);
+      const rLon = Math.min(seg._bounds.lonSpan * 0.15, 12);
+      const rLat = Math.min(seg._bounds.latSpan * 0.15, 8);
       const positions = scatterPositions(seg.brands.length, seg.lon, seg.lat, rLon, rLat);
 
       let activeIdx = -1;
@@ -357,53 +351,50 @@ window.applyStateAtTime = function(t) {
       }
       if (activeIdx >= 0 && positions[activeIdx]) {
         const lp = positions[activeIdx];
-        camLon = lerp(seg.lon, lp[0], 0.25);
-        camLat = lerp(seg.lat, lp[1], 0.25);
+        camLon = lerp(seg.lon, lp[0], 0.2);
+        camLat = lerp(seg.lat, lp[1], 0.2);
       }
     }
-
     map.jumpTo({ center: [camLon, camLat], zoom: targetZoom, pitch: 25, bearing: 0 });
-
-    // ── HIGHLIGHT ──
-    // Show highlight for 0.3s after camera arrives, then fade when first logo appears
-    const transitionEnd = seg.start + TRANSITION_DURATION;
-    const highlightStart = transitionEnd;
-    const firstBrandAbsTime = (seg.brands && seg.brands.length > 0)
-      ? seg.brands[0].word_frame / fps : seg.end;
-    // Ensure highlight shows for at least 0.3s even if word_frame is early
-    const highlightEnd = Math.max(firstBrandAbsTime, transitionEnd + 0.3);
-    if (t >= highlightStart && t < highlightEnd) {
-      showHighlight(seg.iso, map_config.country_color, map_config.country_opacity);
-    } else if (t >= highlightEnd) {
-      clearHighlight();
-    }
-
-    // ── LOGOS ──
-    if (seg.brands && seg._bounds) {
-      const rLon = Math.min(seg._bounds.lonSpan * 0.2, 15);
-      const rLat = Math.min(seg._bounds.latSpan * 0.2, 10);
-      const positions = scatterPositions(seg.brands.length, seg.lon, seg.lat, rLon, rLat);
-
-      // Check if we need to add new logos
-      const visibleCount = seg.brands.filter(b => t >= b.word_frame / fps).length;
-      if (currentMarkers.length < visibleCount) {
-        // Add newly visible logos
-        for (let i = currentMarkers.length; i < visibleCount; i++) {
-          addLogoMarker(seg.brands[i], positions[i]);
-        }
-      }
-    }
-
-    // ── SUBTITLES ──
-    updateSubtitles(seg, t, fps);
   }
+
+  // ── OVERLAYS (Decoupled from camera state — always render on time!) ──
 
   // Segment change cleanup
   if (_prevSegId !== seg.id) {
+    clearHighlight();
     clearLogos();
     clearSubtitles();
     _prevSegId = seg.id;
   }
+
+  // ── HIGHLIGHT ──
+  const firstBrandTime = (seg.brands && seg.brands.length > 0)
+    ? seg.brands[0].word_frame / fps : Infinity;
+  // Ensure highlight shows at start of segment, hides once the first logo pops
+  if (t >= seg.start && t < Math.max(firstBrandTime, seg.start + 0.3)) {
+    showHighlight(seg.iso, map_config.country_color, map_config.country_opacity);
+  } else {
+    clearHighlight();
+  }
+
+  // ── LOGOS ──
+  if (seg.brands && seg._bounds) {
+    const rLon = Math.min(seg._bounds.lonSpan * 0.15, 12);
+    const rLat = Math.min(seg._bounds.latSpan * 0.15, 8);
+    const positions = scatterPositions(seg.brands.length, seg.lon, seg.lat, rLon, rLat);
+
+    // Count how many logos should be visible based on absolute time
+    const visibleCount = seg.brands.filter(b => t >= b.word_frame / fps).length;
+    if (currentMarkers.length < visibleCount) {
+      for (let i = currentMarkers.length; i < visibleCount; i++) {
+        addLogoMarker(seg.brands[i], positions[i]);
+      }
+    }
+  }
+
+  // ── SUBTITLES ──
+  updateSubtitles(seg, t, fps);
 };
 </script>
 </body>
