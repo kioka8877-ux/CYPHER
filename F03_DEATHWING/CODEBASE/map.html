@@ -259,6 +259,7 @@ function clearSubtitles() {
   document.getElementById('subtitle-container').innerHTML = '';
 }
 
+// ═══ PRECISION SUBTITLES SYNCHRONIZER ═══
 function updateSubtitles(seg, timeS, fps) {
   const container = document.getElementById('subtitle-container');
   if (!seg.brands || !seg.brands.length) {
@@ -266,13 +267,34 @@ function updateSubtitles(seg, timeS, fps) {
     return;
   }
 
-  // Split text into words
-  const words = (seg.text || '').split(/\s+/).filter(Boolean);
+  // 1. Extract only the portion of the text relevant to this segment's country & brands.
+  // Since seg.text contains redundant sentences from adjacent segments, we parse and display
+  // only the phrase matching the current country.
+  // e.g. "Spain has Zara, Santander, and SEAT."
+  const countryName = seg.country.toLowerCase();
+  const sentences = (seg.text || '').split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
+
+  let targetSentence = "";
+  for (const s of sentences) {
+    if (s.toLowerCase().includes(countryName) || 
+        seg.brands.some(b => s.toLowerCase().includes(b.name.toLowerCase()))) {
+      targetSentence = s + ".";
+      break;
+    }
+  }
+
+  if (!targetSentence) {
+    // Fallback: use first sentence
+    targetSentence = sentences[0] || seg.text;
+  }
+
+  const words = targetSentence.split(/\s+/).filter(Boolean);
   if (!words.length) return;
 
-  // Build word elements if not already built for this segment
-  if (container.dataset.segId !== String(seg.id)) {
-    container.dataset.segId = String(seg.id);
+  // 2. Build elements if segment changed or text differs
+  const textKey = seg.id + '_' + targetSentence;
+  if (container.dataset.textKey !== textKey) {
+    container.dataset.textKey = textKey;
     container.innerHTML = '';
     const fc = cypherData.display.font_color || '#a3f609';
     words.forEach((w, i) => {
@@ -284,13 +306,50 @@ function updateSubtitles(seg, timeS, fps) {
     });
   }
 
-  // Reveal words progressively based on time within segment
-  const segDuration = seg.end - seg.start;
-  const timeInSeg = timeS - seg.start;
-  const wordsToShow = Math.floor((timeInSeg / segDuration) * words.length);
+  // 3. Map words to exact time.
+  // Since some words are brands, we sync those EXACTLY to the brand word_frame.
+  // Non-brand words are interpolated between the brand timestamps.
+  const wordTimes = new Array(words.length).fill(seg.start);
 
+  // Find brand indices in our parsed sentence
+  seg.brands.forEach(b => {
+    const brandTime = b.word_frame / fps;
+    const nameLower = b.name.toLowerCase();
+
+    // Find matching word index
+    for (let i = 0; i < words.length; i++) {
+      const wordClean = words[i].toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (wordClean === nameLower || nameLower.includes(wordClean)) {
+        wordTimes[i] = brandTime;
+        break;
+      }
+    }
+  });
+
+  // Interpolate times of non-brand words between brand timestamps
+  let lastKnownTime = seg.start;
+  for (let i = 0; i < words.length; i++) {
+    if (wordTimes[i] === seg.start && i > 0) {
+      // Find next known brand timestamp
+      let nextKnownIdx = -1;
+      for (let j = i + 1; j < words.length; j++) {
+        if (wordTimes[j] !== seg.start) { nextKnownIdx = j; break; }
+      }
+      const nextTime = nextKnownIdx !== -1 ? wordTimes[nextKnownIdx] : seg.end;
+      const count = (nextKnownIdx !== -1 ? nextKnownIdx : words.length) - i + 1;
+      // Linearly space the intermediate non-brand words
+      for (let k = 0; i < (nextKnownIdx !== -1 ? nextKnownIdx : words.length); i++, k++) {
+        wordTimes[i] = lastKnownTime + ((nextTime - lastKnownTime) * (k + 1) / count);
+      }
+      i--; // adjust index after loop
+    } else {
+      lastKnownTime = wordTimes[i];
+    }
+  }
+
+  // Reveal words on screen at their precise calculated time
   container.querySelectorAll('.subtitle-word').forEach((el, i) => {
-    el.classList.toggle('visible', i < wordsToShow);
+    el.classList.toggle('visible', timeS >= wordTimes[i]);
   });
 }
 
