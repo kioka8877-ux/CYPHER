@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1080, height=1920">
-<title>CYPHER DEATHWING v9.5</title>
+<title>CYPHER DEATHWING v9.6</title>
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
@@ -292,42 +292,62 @@ function updateSubtitles(seg, timeS, fps) {
     }
   }
 
-  // 3. Calculate per-word timing using brand word_frames as anchors
-  //    FIX: Use -1 sentinel (never collides with real time)
-  //    FIX: Clean forward-pass interpolation (no loop variable mutation)
-  //    FIX: Strict brand matching (no includes() false positives)
-  const UNSET = -1;
-  const wordTimes = new Array(words.length).fill(UNSET);
+  // 3. Determine which words belong to THIS segment vs a neighbouring segment.
+  //    FIX v9.6: shared-text segments — only reveal words whose brand word_frames
+  //    fall within this segment's time range. Words belonging to the other
+  //    segment's brands stay hidden until that segment is active.
+  const segStartTime = seg.start;
+  const segEndTime = seg.end;
+  // Use allSegments to find the full time span if available
+  const allSegs = (cypherData.allSegments || cypherData.segments);
 
-  // Sort brands chronologically for reliable matching
+  // Build a set of word indices that belong to this segment's brands
   const sortedBrands = seg._brandsSorted || [...seg.brands].sort((a, b) => a.word_frame - b.word_frame);
 
-  // Match each brand to its word position
+  // FIX v9.6: For shared-text segments, determine the "ownership" of each word.
+  // A word "belongs" to this segment if its matched brand's word_frame falls
+  // within [seg.start, seg.end]. Words matching brands from other segments
+  // (with word_frames outside this range) are NOT revealed during this segment.
+  const wordBelongsToSeg = new Array(words.length).fill(false);
+
+  // Match brands to word positions (same logic as before)
+  const wordTimes = new Array(words.length).fill(-1);
+  const UNSET = -1;
+
   for (const b of sortedBrands) {
     const brandTime = b.word_frame / fps;
-    // Handle multi-word brands: split on spaces and hyphens for matching
     const brandParts = b.name.toLowerCase().replace(/['']/g, '').split(/[\s-]+/);
     const firstPart = brandParts[0].replace(/[^a-z0-9]/g, '');
     if (!firstPart) continue;
 
-    // Find first UNMATCHED word that matches this brand
     for (let i = 0; i < words.length; i++) {
-      if (wordTimes[i] !== UNSET) continue; // skip already-matched words
+      if (wordTimes[i] !== UNSET) continue;
       const wClean = words[i].toLowerCase().replace(/[^a-z0-9]/g, '');
       if (!wClean) continue;
 
-      // Strict matching: exact match, or prefix match only if both sides are 4+ chars
       const isMatch = (wClean === firstPart) ||
         (firstPart.length >= 4 && wClean.length >= 4 && (
           wClean.startsWith(firstPart) || firstPart.startsWith(wClean)
         ));
 
       if (isMatch) {
-        wordTimes[i] = brandTime;
-        // Mark subsequent words of multi-word brands (e.g. "British" "Airways")
+        // FIX v9.6 #4: If word_frame=0 but this is NOT the first word, it's a data error.
+        // Treat as UNSET so it gets interpolated properly instead of appearing at t=0.
+        if (b.word_frame === 0 && i > 0) {
+          // Skip — leave as UNSET, will be interpolated
+          break;
+        }
+
+        // FIX v9.6 #2: Clamp brand time to segment start if it falls before
+        const effectiveTime = brandTime < segStartTime ? segStartTime : brandTime;
+        wordTimes[i] = effectiveTime;
+        wordBelongsToSeg[i] = true;
+
+        // Mark subsequent words of multi-word brands
         for (let w = 1; w < brandParts.length && (i + w) < words.length; w++) {
           if (wordTimes[i + w] === UNSET) {
-            wordTimes[i + w] = brandTime + 0.05 * w;
+            wordTimes[i + w] = effectiveTime + 0.05 * w;
+            wordBelongsToSeg[i + w] = true;
           }
         }
         break;
@@ -335,52 +355,84 @@ function updateSubtitles(seg, timeS, fps) {
     }
   }
 
-  // 4. Anchor endpoints
-  if (wordTimes[0] === UNSET) wordTimes[0] = seg.start;
-  if (wordTimes[words.length - 1] === UNSET) {
-    wordTimes[words.length - 1] = Math.min(seg.end - 0.05, 
-      (sortedBrands.length > 0 ? sortedBrands[sortedBrands.length - 1].word_frame / fps + 0.3 : seg.end - 0.05));
+  // 4. Anchor endpoints — only for words that belong to this segment
+  //    Find first and last "owned" words and anchor them
+  let firstOwned = -1, lastOwned = -1;
+  for (let i = 0; i < words.length; i++) {
+    if (wordBelongsToSeg[i]) {
+      if (firstOwned < 0) firstOwned = i;
+      lastOwned = i;
+    }
   }
 
-  // 5. Forward-pass interpolation: fill gaps between known timestamps
-  //    FIX: clean loop, no i mutation, no i-- hack
+  // Anchor the first owned word to seg.start if it has no brand time
+  if (firstOwned >= 0 && wordTimes[firstOwned] === UNSET) {
+    wordTimes[firstOwned] = segStartTime;
+  }
+  // Anchor the last owned word
+  if (lastOwned >= 0 && wordTimes[lastOwned] === UNSET) {
+    wordTimes[lastOwned] = Math.min(segEndTime - 0.05,
+      (sortedBrands.length > 0 ? sortedBrands[sortedBrands.length - 1].word_frame / fps + 0.3 : segEndTime - 0.05));
+  }
+
+  // 5. Forward-pass interpolation — only among owned words
+  //    Non-owned words stay UNSET (hidden)
   let prevIdx = -1;
   for (let i = 0; i < words.length; i++) {
+    if (!wordBelongsToSeg[i]) continue; // skip non-owned words
     if (wordTimes[i] !== UNSET) {
-      // Found a known timestamp — interpolate gap from prevIdx+1 to i-1
       if (prevIdx >= 0 && i - prevIdx > 1) {
+        // Interpolate owned words between prevIdx and i
         const startT = wordTimes[prevIdx];
         const endT = wordTimes[i];
-        const gap = i - prevIdx;
+        let gap = 0;
         for (let j = prevIdx + 1; j < i; j++) {
-          wordTimes[j] = startT + (endT - startT) * (j - prevIdx) / gap;
+          if (wordBelongsToSeg[j]) gap++;
+        }
+        let count = 0;
+        for (let j = prevIdx + 1; j < i; j++) {
+          if (wordBelongsToSeg[j]) {
+            count++;
+            wordTimes[j] = startT + (endT - startT) * count / (gap + 1);
+          }
         }
       }
       prevIdx = i;
     }
   }
 
-  // Fill any remaining UNSET at the tail
-  if (prevIdx >= 0 && prevIdx < words.length - 1) {
+  // Fill any remaining UNSET owned words at the tail
+  if (prevIdx >= 0 && prevIdx < lastOwned) {
     const startT = wordTimes[prevIdx];
-    const endT = seg.end;
-    const gap = words.length - prevIdx;
-    for (let j = prevIdx + 1; j < words.length; j++) {
-      wordTimes[j] = startT + (endT - startT) * (j - prevIdx) / gap;
+    const endT = segEndTime;
+    let gap = 0;
+    for (let j = prevIdx + 1; j <= lastOwned; j++) {
+      if (wordBelongsToSeg[j] && wordTimes[j] === UNSET) gap++;
+    }
+    let count = 0;
+    for (let j = prevIdx + 1; j <= lastOwned; j++) {
+      if (wordBelongsToSeg[j] && wordTimes[j] === UNSET) {
+        count++;
+        wordTimes[j] = startT + (endT - startT) * count / (gap + 1);
+      }
     }
   }
 
-  // Safety: any still UNSET gets linear spacing from seg.start to seg.end
+  // Safety: any owned word still UNSET gets linear spacing
   for (let i = 0; i < words.length; i++) {
-    if (wordTimes[i] === UNSET) {
-      wordTimes[i] = seg.start + (seg.end - seg.start) * i / words.length;
+    if (wordBelongsToSeg[i] && wordTimes[i] === UNSET) {
+      wordTimes[i] = segStartTime + (segEndTime - segStartTime) * (i - firstOwned) / Math.max(1, lastOwned - firstOwned);
     }
   }
 
-  // 6. Reveal words at their calculated time
+  // 6. Reveal words: only owned words are shown, non-owned stay hidden
   const spans = container.querySelectorAll('.subtitle-word');
   for (let i = 0; i < spans.length && i < wordTimes.length; i++) {
-    spans[i].classList.toggle('visible', timeS >= wordTimes[i]);
+    if (!wordBelongsToSeg[i]) {
+      spans[i].classList.remove('visible');
+    } else {
+      spans[i].classList.toggle('visible', timeS >= wordTimes[i]);
+    }
   }
 }
 
@@ -480,12 +532,18 @@ window.applyStateAtTime = function(t) {
   }
 
   // ── LOGOS (appear at exact word_frame time, decoupled from transition) ──
+  // FIX v9.6: guard against word_frame < seg.start (brand timing from previous segment)
   if (seg.brands && seg._bounds) {
     const rLon = Math.min(seg._bounds.lonSpan * 0.15, 12);
     const rLat = Math.min(seg._bounds.latSpan * 0.15, 8);
     const positions = scatterPositions(seg.brands.length, seg.lon, seg.lat, rLon, rLat);
 
-    const visibleCount = seg.brands.filter(b => t >= b.word_frame / fps).length;
+    const visibleCount = seg.brands.filter(b => {
+      const bt = b.word_frame / fps;
+      // If brand time is before segment start, show immediately (already "due")
+      const effectiveTime = bt < seg.start ? seg.start : bt;
+      return t >= effectiveTime;
+    }).length;
     if (currentMarkers.length < visibleCount) {
       for (let i = currentMarkers.length; i < visibleCount; i++) {
         addLogoMarker(seg.brands[i], positions[i]);

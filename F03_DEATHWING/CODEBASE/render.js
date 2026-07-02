@@ -96,7 +96,7 @@ async function main() {
   // If it's the last segment, render up to the absolute final frame of the video
   const endFrame = nextSeg
     ? Math.floor(nextSeg.start * fps) - 1
-    : (meta.total_frames ? meta.total_frames - 1 : Math.ceil(tgt[tgt.length - 1].end * fps));
+    : Math.round(tgt[tgt.length - 1].end * fps) - 1;
 
   const total = endFrame - startFrame + 1;
   console.log(`🎞️  Frames ${startFrame}→${endFrame} (${total} frames, ${(total/fps).toFixed(1)}s)`);
