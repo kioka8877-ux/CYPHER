@@ -1,81 +1,64 @@
-name: CYPHER — Chunk 0 (Preview + Gate)
+name: "CYPHER — Chunk 0 Preview (MapLibre v9.0)"
 
 on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "CYPHER run_id"
-        required: true
+        description: "Release tag for assets"
+        default: "CYP_20260622_0854"
+      segments:
+        description: "Segments to preview (comma-separated)"
+        default: "0,1"
 
 jobs:
-  chunk0:
+  preview:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.11"
+          node-version: "20"
 
-      - name: Install system deps
+      - name: Install dependencies
+        working-directory: F03_DEATHWING/CODEBASE
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            libcairo2-dev libpango1.0-dev \
-            fonts-liberation fonts-dejavu-core \
-            libpangocairo-1.0-0 libglib2.0-dev pkg-config build-essential \
-            ffmpeg
-          sudo fc-cache -fv
-          pip install --upgrade pip wheel
-
-      - name: Install Manim + geo
-        run: pip install manim==0.20.1 geopandas matplotlib contextily requests Pillow
+          npm install
+          npx playwright install chromium --with-deps
 
       - name: Download assets from release
+        working-directory: F03_DEATHWING/CODEBASE
+        run: |
+          mkdir -p assets/logos
+          gh release download "${{ github.event.inputs.run_id }}" \
+            --pattern "render_spec_v2.json" \
+            --pattern "logos.zip" \
+            --dir assets/
+          unzip -o assets/logos.zip -d assets/logos/
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Natural Earth GeoJSON
+        working-directory: F03_DEATHWING/CODEBASE/assets
         run: |
-          mkdir -p ws && cd ws
-          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "render_spec_v2.json" --dir . || \
-          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "render_spec.json" --dir .
-          gh release download "${{ inputs.run_id }}" --repo ${{ github.repository }} --pattern "logos.zip" --dir .
-          mkdir -p logos && cd logos && unzip -o ../logos.zip && cd ..
-          echo "Logos:" && ls -lh logos/
-          ls -lh
+          curl -sL -o ne_110m_admin_0_countries.geojson \
+            "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson"
 
-      - name: Copy scene files
+      - name: Install fonts
         run: |
-          cp F03_DEATHWING/CODEBASE/CypherScene.py ws/CypherScene.py
-          cp F03_DEATHWING/CODEBASE/cyp_camera_plan.py ws/cyp_camera_plan.py
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-liberation ttf-mscorefonts-installer || true
+          fc-cache -fv
 
-      - name: Generate camera_plan.json
-        run: cd ws && python cyp_camera_plan.py
-
-      - name: Render PREVIEW (segments 0-1)
+      - name: Render preview
+        working-directory: F03_DEATHWING/CODEBASE
         run: |
-          cd ws
-          CYP_SEG_FROM=0 CYP_SEG_TO=1 python -m manim render CypherScene.py CypherScene -ql
-          PREV=$(find ./media -name "*.mp4" 2>/dev/null | grep -v partial | head -1)
-          if [ -z "$PREV" ]; then echo "::error::no preview" && exit 1; fi
-          cp "$PREV" preview_chunk0.mp4
-          ls -lh preview_chunk0.mp4 camera_plan.json
+          node render.js --segments "${{ github.event.inputs.segments }}" --output preview_chunk0.mp4
 
-      - name: Upload artifacts
+      - name: Upload preview artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cypher-chunk0-${{ inputs.run_id }}
-          path: |
-            ws/preview_chunk0.mp4
-            ws/camera_plan.json
+          name: cypher-preview-${{ github.event.inputs.run_id }}
+          path: F03_DEATHWING/CODEBASE/preview_chunk0.mp4
           retention-days: 7
-
-      - name: Publish to release
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          cd ws
-          gh release upload "${{ inputs.run_id }}" preview_chunk0.mp4 camera_plan.json --repo ${{ github.repository }} --clobber
-          echo "✅ Preview ready. Download & validate, then run Render All."
