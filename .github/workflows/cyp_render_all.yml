@@ -49,6 +49,9 @@ jobs:
           curl -sL -o ne_110m_admin_0_countries.geojson \
             "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson"
 
+      - name: Install FFmpeg
+        run: sudo apt-get install -y ffmpeg
+
       - name: Install fonts
         run: |
           sudo apt-get update -qq
@@ -77,6 +80,9 @@ jobs:
           pattern: chunk-*
           merge-multiple: true
           path: chunks/
+
+      - name: Install FFmpeg for assembly
+        run: sudo apt-get install -y ffmpeg
 
       - name: Download audio
         run: |
