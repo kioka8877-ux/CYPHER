@@ -439,5 +439,26 @@
     "position": "bottom",
     "animation": "ltr",
     "visual_scale": 0.85
-  }
+  },
+  "pivot_history": [
+    {
+      "gate": "F03_DEATHWING",
+      "version": "v9.0.0-maplibre",
+      "branch": "maplibre-pivot",
+      "engine": "MapLibre GL JS + Playwright + jumpTo()",
+      "reason": "Manim/Cairo timeout CI (100min for 62s video), no satellite tiles, no frustum culling",
+      "previous_engine": "Manim v7.5 (Cairo)",
+      "date": "2026-07-02",
+      "status": "in_progress",
+      "files_added": [
+        "F03_DEATHWING/CODEBASE/render.js",
+        "F03_DEATHWING/CODEBASE/map.html",
+        "F03_DEATHWING/CODEBASE/package.json",
+        "F03_DEATHWING/CODEBASE/lib/camera.js",
+        "F03_DEATHWING/CODEBASE/lib/highlight.js",
+        "F03_DEATHWING/CODEBASE/lib/subtitles.js",
+        "F03_DEATHWING/CODEBASE/lib/overlays/logos.js"
+      ]
+    }
+  ]
 }

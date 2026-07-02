@@ -1,0 +1,64 @@
+name: "CYPHER — Chunk 0 Preview (MapLibre v9.0)"
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Release tag for assets"
+        default: "CYP_20260622_0854"
+      segments:
+        description: "Segments to preview (comma-separated)"
+        default: "0,1"
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: F03_DEATHWING/CODEBASE
+        run: |
+          npm install
+          npx playwright install chromium --with-deps
+
+      - name: Download assets from release
+        working-directory: F03_DEATHWING/CODEBASE
+        run: |
+          mkdir -p assets/logos
+          gh release download "${{ github.event.inputs.run_id }}" \
+            --pattern "render_spec_v2.json" \
+            --pattern "logos.zip" \
+            --dir assets/
+          unzip -o assets/logos.zip -d assets/logos/
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download Natural Earth GeoJSON
+        working-directory: F03_DEATHWING/CODEBASE/assets
+        run: |
+          curl -sL -o ne_110m_admin_0_countries.geojson \
+            "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson"
+
+      - name: Install fonts
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-liberation ttf-mscorefonts-installer || true
+          fc-cache -fv
+
+      - name: Render preview
+        working-directory: F03_DEATHWING/CODEBASE
+        run: |
+          node render.js --segments "${{ github.event.inputs.segments }}" --output preview_chunk0.mp4
+
+      - name: Upload preview artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypher-preview-${{ github.event.inputs.run_id }}
+          path: F03_DEATHWING/CODEBASE/preview_chunk0.mp4
+          retention-days: 7

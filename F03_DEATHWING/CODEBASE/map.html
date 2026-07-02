@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1080, height=1920">
+<title>CYPHER DEATHWING v9.0</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0a0a12; }
+  #map { width: 100%; height: 100%; }
+
+  .brand-marker {
+    display: none;
+    width: 120px; height: 120px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.95);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    transition: opacity 0.3s ease;
+  }
+  .brand-marker.visible { display: flex; align-items: center; justify-content: center; }
+  .brand-marker img { width: 90%; height: 90%; object-fit: contain; }
+  .brand-marker .fallback-text {
+    font-family: Impact, 'Arial Black', sans-serif;
+    font-size: 16px; color: #333; text-align: center;
+    padding: 8px; word-break: break-word;
+  }
+
+  #subtitle-container {
+    position: absolute; bottom: 60px; left: 0; right: 0;
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+    padding: 0 40px; z-index: 100;
+  }
+  .subtitle-word {
+    font-family: Impact, 'Arial Black', sans-serif;
+    font-size: 32px; color: #a3f609;
+    text-shadow: 2px 2px 6px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.7);
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .subtitle-word.visible { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="subtitle-container"></div>
+
+<script>
+'use strict';
+
+// ═══ GLOBALS ═══
+let map, cypherData, countryFeatures = {};
+let currentMarkers = [], currentHighlightId = null;
+window.mapReady = false;
+window.cypherReady = false;
+
+// ═══ MAP INIT ═══
+map = new maplibregl.Map({
+  container: 'map',
+  style: {
+    version: 8,
+    sources: {
+      'esri-sat': {
+        type: 'raster',
+        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+        tileSize: 256, maxzoom: 18,
+        attribution: 'Tiles © Esri'
+      }
+    },
+    layers: [{ id: 'satellite', type: 'raster', source: 'esri-sat' }]
+  },
+  center: [0, 20], zoom: 1.5, pitch: 0, bearing: 0,
+  interactive: false,
+  preserveDrawingBuffer: true,
+  fadeDuration: 0
+});
+
+map.on('load', () => {
+  window.map = map;
+  window.mapReady = true;
+});
+
+// ═══ ISO MAPPING ═══
+const ISO2TO3 = {
+  US:'USA',DE:'DEU',JP:'JPN',KR:'KOR',FR:'FRA',IT:'ITA',SE:'SWE',
+  CN:'CHN',CA:'CAN',GB:'GBR',AE:'ARE',TW:'TWN',CH:'CHE',NL:'NLD',
+  ES:'ESP',AU:'AUS',SG:'SGP',IN:'IND',FI:'FIN',DK:'DNK',BR:'BRA',
+  NO:'NOR',IE:'IRL',NZ:'NZL',ZA:'ZAF',MX:'MEX',AR:'ARG',TR:'TUR',
+  SA:'SAU',EG:'EGY',TH:'THA',VN:'VNM',PH:'PHL',MY:'MYS',ID:'IDN',
+  PK:'PAK',BD:'BGD',RU:'RUS',UA:'UKR',PL:'POL',CZ:'CZE',GR:'GRC',
+  PT:'PRT',HU:'HUN',RO:'ROU',BG:'BGR',HR:'HRV',AT:'AUT',BE:'BEL'
+};
+
+// ═══ EASING ═══
+function easeInOutCubic(t) {
+  return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3) / 2;
+}
+function lerp(a, b, t) { return a + (b-a) * t; }
+
+// ═══ INIT CYPHER ═══
+window.initCypher = function(data) {
+  cypherData = data;
+  const { geojson, map_config, display, segments } = data;
+
+  // Add country source
+  map.addSource('countries', { type: 'geojson', data: geojson });
+
+  // Index country features by ISO3
+  const isoCol = geojson.features[0]?.properties?.ISO_A3 !== undefined ? 'ISO_A3'
+    : geojson.features[0]?.properties?.ISO_A3_EH !== undefined ? 'ISO_A3_EH'
+    : 'ADM0_A3';
+
+  for (const feat of geojson.features) {
+    const code = feat.properties[isoCol] || feat.properties['ISO_A3_EH'] || feat.properties['ADM0_A3'];
+    if (code && code !== '-99') {
+      countryFeatures[code] = feat;
+    }
+  }
+
+  // Pre-calculate bounds for each segment
+  for (const seg of segments) {
+    const iso3 = ISO2TO3[seg.iso] || seg.iso;
+    const feat = countryFeatures[iso3];
+    if (feat) {
+      const bounds = getFeatureBounds(feat);
+      // Cap for territories (Alaska, DOM-TOM)
+      const lonSpan = Math.min(bounds.lonSpan, 60);
+      const latSpan = Math.min(bounds.latSpan, 40);
+      seg._bounds = { ...bounds, lonSpan, latSpan };
+      // Calculate MapLibre zoom for 95% fill (vertical viewport 1080x1920)
+      // Width is constraining: lonSpan at zoom Z covers 360/2^Z * 256/1080 * tileSize
+      const targetLonSpan = lonSpan / 0.95;
+      seg._mlZoom = Math.log2(360 / targetLonSpan) + 0.5;
+      seg._mlZoom = Math.max(2, Math.min(seg._mlZoom, 12));
+    } else {
+      seg._mlZoom = seg.zoom || 4;
+      seg._bounds = null;
+    }
+  }
+
+  // Apply display styles to subtitle container
+  const sc = document.getElementById('subtitle-container');
+  if (display.font_color) {
+    document.querySelectorAll('.subtitle-word').forEach(w => w.style.color = display.font_color);
+  }
+
+  window.cypherReady = true;
+};
+
+function getFeatureBounds(feat) {
+  let minLon = 180, maxLon = -180, minLat = 90, maxLat = -90;
+  function scan(coords) {
+    if (typeof coords[0] === 'number') {
+      minLon = Math.min(minLon, coords[0]); maxLon = Math.max(maxLon, coords[0]);
+      minLat = Math.min(minLat, coords[1]); maxLat = Math.max(maxLat, coords[1]);
+    } else { coords.forEach(scan); }
+  }
+  scan(feat.geometry.coordinates);
+  return { minLon, maxLon, minLat, maxLat, lonSpan: maxLon-minLon, latSpan: maxLat-minLat,
+           cx: (minLon+maxLon)/2, cy: (minLat+maxLat)/2 };
+}
+
+// ═══ HIGHLIGHT ═══
+function showHighlight(iso2, color, opacity) {
+  const iso3 = ISO2TO3[iso2] || iso2;
+  if (currentHighlightId === iso3) return;
+  clearHighlight();
+  currentHighlightId = iso3;
+
+  // Fill
+  map.addLayer({
+    id: 'cy-fill', type: 'fill', source: 'countries',
+    filter: ['any',
+      ['==', ['get', 'ISO_A3'], iso3],
+      ['==', ['get', 'ISO_A3_EH'], iso3],
+      ['==', ['get', 'ADM0_A3'], iso3]
+    ],
+    paint: { 'fill-color': color, 'fill-opacity': opacity || 0.45 }
+  });
+
+  // Glow (wide blurred line)
+  map.addLayer({
+    id: 'cy-glow', type: 'line', source: 'countries',
+    filter: ['any',
+      ['==', ['get', 'ISO_A3'], iso3],
+      ['==', ['get', 'ISO_A3_EH'], iso3],
+      ['==', ['get', 'ADM0_A3'], iso3]
+    ],
+    paint: { 'line-color': '#ffffff', 'line-width': 10, 'line-blur': 6, 'line-opacity': 0.5 }
+  });
+
+  // Sharp border
+  map.addLayer({
+    id: 'cy-border', type: 'line', source: 'countries',
+    filter: ['any',
+      ['==', ['get', 'ISO_A3'], iso3],
+      ['==', ['get', 'ISO_A3_EH'], iso3],
+      ['==', ['get', 'ADM0_A3'], iso3]
+    ],
+    paint: { 'line-color': '#ffffff', 'line-width': 2 }
+  });
+}
+
+function clearHighlight() {
+  ['cy-fill','cy-glow','cy-border'].forEach(id => {
+    if (map.getLayer(id)) map.removeLayer(id);
+  });
+  currentHighlightId = null;
+}
+
+// ═══ LOGOS ═══
+function clearLogos() {
+  currentMarkers.forEach(m => m.remove());
+  currentMarkers = [];
+}
+
+function scatterPositions(n, centerLon, centerLat, radiusLon, radiusLat) {
+  const positions = [];
+  if (n === 1) { positions.push([centerLon, centerLat]); }
+  else {
+    for (let i = 0; i < n; i++) {
+      const angle = (2 * Math.PI * i / n) - Math.PI/2;
+      const r = n <= 3 ? 0.6 : 0.8;
+      positions.push([
+        centerLon + Math.cos(angle) * radiusLon * r,
+        centerLat + Math.sin(angle) * radiusLat * r
+      ]);
+    }
+  }
+  return positions;
+}
+
+function addLogoMarker(brand, position) {
+  const el = document.createElement('div');
+  el.className = 'brand-marker visible';
+  if (brand._logo_abs) {
+    el.innerHTML = '<img src="' + brand._logo_abs + '" onerror="this.parentNode.innerHTML=\'<div class=fallback-text>' + brand.name + '</div>\'">';
+  } else {
+    el.innerHTML = '<div class="fallback-text">' + brand.name + '</div>';
+  }
+  const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+    .setLngLat(position)
+    .addTo(map);
+  currentMarkers.push(marker);
+  return marker;
+}
+
+// ═══ SUBTITLES ═══
+function clearSubtitles() {
+  document.getElementById('subtitle-container').innerHTML = '';
+}
+
+function updateSubtitles(seg, timeS, fps) {
+  const container = document.getElementById('subtitle-container');
+  if (!seg.brands || !seg.brands.length) {
+    container.innerHTML = '';
+    return;
+  }
+
+  // Split text into words
+  const words = (seg.text || '').split(/\s+/).filter(Boolean);
+  if (!words.length) return;
+
+  // Build word elements if not already built for this segment
+  if (container.dataset.segId !== String(seg.id)) {
+    container.dataset.segId = String(seg.id);
+    container.innerHTML = '';
+    const fc = cypherData.display.font_color || '#a3f609';
+    words.forEach((w, i) => {
+      const span = document.createElement('span');
+      span.className = 'subtitle-word';
+      span.textContent = w;
+      span.style.color = fc;
+      container.appendChild(span);
+    });
+  }
+
+  // Reveal words progressively based on time within segment
+  const segDuration = seg.end - seg.start;
+  const timeInSeg = timeS - seg.start;
+  const wordsToShow = Math.floor((timeInSeg / segDuration) * words.length);
+
+  container.querySelectorAll('.subtitle-word').forEach((el, i) => {
+    el.classList.toggle('visible', i < wordsToShow);
+  });
+}
+
+// ═══ STATE MACHINE ═══
+let _prevSegId = -1;
+const TRANSITION_DURATION = 1.4;
+
+window.applyStateAtTime = function(t) {
+  if (!cypherData) return;
+  const { segments, map_config, fps, allSegments } = cypherData;
+
+  // Find current segment
+  let seg = null;
+  for (const s of segments) {
+    if (t >= s.start && t <= s.end) { seg = s; break; }
+  }
+  // If between segments, find the next one (transition phase)
+  if (!seg) {
+    for (const s of segments) {
+      if (t < s.start) { seg = s; break; }
+    }
+  }
+  if (!seg) seg = segments[segments.length - 1];
+
+  // Find previous segment (for camera transition)
+  const segIdx = segments.indexOf(seg);
+  const prevSeg = segIdx > 0 ? segments[segIdx - 1]
+    : (allSegments && seg.id > 0 ? allSegments.find(s => s.id === seg.id - 1) : null);
+
+  const timeInSeg = t - seg.start;
+  const targetZoom = seg._mlZoom || 4;
+
+  // ── CAMERA ──
+  if (timeInSeg < TRANSITION_DURATION && timeInSeg >= 0) {
+    // Transition phase
+    const from = prevSeg
+      ? { lon: prevSeg.lon, lat: prevSeg.lat, zoom: prevSeg._mlZoom || 4 }
+      : { lon: 0, lat: 20, zoom: 1.5 };
+    const progress = easeInOutCubic(Math.max(0, timeInSeg) / TRANSITION_DURATION);
+    map.jumpTo({
+      center: [lerp(from.lon, seg.lon, progress), lerp(from.lat, seg.lat, progress)],
+      zoom: lerp(from.zoom, targetZoom, progress),
+      pitch: lerp(prevSeg ? 25 : 0, 25, progress),
+      bearing: 0
+    });
+    // Clear visuals during transition
+    if (_prevSegId !== seg.id) {
+      clearHighlight(); clearLogos(); clearSubtitles();
+      _prevSegId = seg.id;
+    }
+  } else {
+    // Static phase — camera on country
+    let camLon = seg.lon, camLat = seg.lat;
+
+    // Micro-pan toward active logo
+    if (seg.brands && seg.brands.length > 0 && seg._bounds) {
+      const rLon = Math.min(seg._bounds.lonSpan * 0.2, 15);
+      const rLat = Math.min(seg._bounds.latSpan * 0.2, 10);
+      const positions = scatterPositions(seg.brands.length, seg.lon, seg.lat, rLon, rLat);
+
+      let activeIdx = -1;
+      for (let i = seg.brands.length - 1; i >= 0; i--) {
+        if (t >= seg.brands[i].word_frame / fps) { activeIdx = i; break; }
+      }
+      if (activeIdx >= 0 && positions[activeIdx]) {
+        const lp = positions[activeIdx];
+        camLon = lerp(seg.lon, lp[0], 0.25);
+        camLat = lerp(seg.lat, lp[1], 0.25);
+      }
+    }
+
+    map.jumpTo({ center: [camLon, camLat], zoom: targetZoom, pitch: 25, bearing: 0 });
+
+    // ── HIGHLIGHT ──
+    const firstBrandTime = (seg.brands && seg.brands.length > 0)
+      ? seg.brands[0].word_frame / fps : Infinity;
+    if (t < firstBrandTime) {
+      showHighlight(seg.iso, map_config.country_color, map_config.country_opacity);
+    } else {
+      clearHighlight();
+    }
+
+    // ── LOGOS ──
+    if (seg.brands && seg._bounds) {
+      const rLon = Math.min(seg._bounds.lonSpan * 0.2, 15);
+      const rLat = Math.min(seg._bounds.latSpan * 0.2, 10);
+      const positions = scatterPositions(seg.brands.length, seg.lon, seg.lat, rLon, rLat);
+
+      // Check if we need to add new logos
+      const visibleCount = seg.brands.filter(b => t >= b.word_frame / fps).length;
+      if (currentMarkers.length < visibleCount) {
+        // Add newly visible logos
+        for (let i = currentMarkers.length; i < visibleCount; i++) {
+          addLogoMarker(seg.brands[i], positions[i]);
+        }
+      }
+    }
+
+    // ── SUBTITLES ──
+    updateSubtitles(seg, t, fps);
+  }
+
+  // Segment change cleanup
+  if (_prevSegId !== seg.id) {
+    clearLogos();
+    clearSubtitles();
+    _prevSegId = seg.id;
+  }
+};
+</script>
+</body>
+</html>

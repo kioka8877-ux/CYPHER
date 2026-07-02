@@ -1,0 +1,13 @@
+{
+  "name": "cypher-deathwing-maplibre",
+  "version": "9.0.0",
+  "description": "CYPHER F03 DEATHWING \u2014 MapLibre GL + Playwright renderer",
+  "main": "render.js",
+  "scripts": {
+    "preview": "node render.js --segments 0,1 --output preview_chunk0.mp4",
+    "render": "node render.js --output full_render.mp4"
+  },
+  "dependencies": {
+    "playwright": "^1.45.0"
+  }
+}
