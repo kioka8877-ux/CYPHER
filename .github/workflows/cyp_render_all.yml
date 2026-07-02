@@ -6,9 +6,9 @@ on:
       run_id:
         description: "Release tag for assets"
         default: "CYP_20260622_0854"
-      total_segments:
-        description: "Total number of segments"
-        default: "21"
+
+permissions:
+  contents: write
 
 jobs:
   render:
@@ -24,6 +24,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+
+      - name: Install FFmpeg
+        run: sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
         working-directory: F03_DEATHWING/CODEBASE
@@ -49,14 +52,10 @@ jobs:
           curl -sL -o ne_110m_admin_0_countries.geojson \
             "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_admin_0_countries.geojson"
 
-      - name: Install FFmpeg
-        run: sudo apt-get install -y ffmpeg
-
       - name: Install fonts
         run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq fonts-liberation ttf-mscorefonts-installer || true
-          fc-cache -fv
+          sudo apt-get install -y fonts-liberation || true
+          fc-cache -fv || true
 
       - name: Render segment ${{ matrix.segment }}
         working-directory: F03_DEATHWING/CODEBASE
@@ -75,14 +74,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install FFmpeg
+        run: sudo apt-get install -y ffmpeg
+
       - uses: actions/download-artifact@v4
         with:
           pattern: chunk-*
           merge-multiple: true
           path: chunks/
 
-      - name: Install FFmpeg for assembly
-        run: sudo apt-get install -y ffmpeg
+      - name: List chunks
+        run: ls -la chunks/
 
       - name: Download audio
         run: |
@@ -91,26 +93,30 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Concat chunks + remux audio
+      - name: Concat chunks
         run: |
-          # Generate concat file (sorted by segment number)
-          for i in $(seq 0 ${{ github.event.inputs.total_segments }}); do
+          for i in $(seq 0 20); do
             [ -f "chunks/chunk_${i}.mp4" ] && echo "file 'chunks/chunk_${i}.mp4'" >> concat.txt
           done
-
-          # Concat video
+          cat concat.txt
           ffmpeg -f concat -safe 0 -i concat.txt -c copy cypher_video_noaudio.mp4
 
-          # Remux with audio
+      - name: Remux with audio
+        run: |
           ffmpeg -i cypher_video_noaudio.mp4 -i audio_clean.mp3 \
             -c:v copy -c:a aac -shortest cypher_final.mp4
+          ls -lh cypher_final.mp4
 
-          # Upload to release
-          gh release upload "${{ github.event.inputs.run_id }}" cypher_final.mp4 --clobber
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: actions/upload-artifact@v4
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
           name: cypher-final
           path: cypher_final.mp4
+          retention-days: 7
+
+      - name: Upload to release
+        continue-on-error: true
+        run: |
+          gh release upload "${{ github.event.inputs.run_id }}" cypher_final.mp4 --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
