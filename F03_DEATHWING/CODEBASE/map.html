@@ -64,7 +64,7 @@ map = new maplibregl.Map({
       'esri-sat': {
         type: 'raster',
         tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-        tileSize: 256, maxzoom: 18,
+        tileSize: 256, maxzoom: 19,
         attribution: 'Tiles © Esri'
       }
     },
@@ -112,9 +112,19 @@ window.initCypher = function(data) {
     : 'ADM0_A3';
 
   for (const feat of geojson.features) {
-    const code = feat.properties[isoCol] || feat.properties['ISO_A3_EH'] || feat.properties['ADM0_A3'];
-    if (code && code !== '-99') {
-      countryFeatures[code] = feat;
+    // Index by ALL possible ISO codes for robust lookup
+    const codes = [
+      feat.properties['ISO_A3'],
+      feat.properties['ISO_A3_EH'],
+      feat.properties['ADM0_A3']
+    ].filter(c => c && c !== '-99');
+    for (const code of codes) {
+      if (!countryFeatures[code]) countryFeatures[code] = feat;
+    }
+    // Also index by ISO_A2 if available
+    const a2 = feat.properties['ISO_A2'] || feat.properties['ISO_A2_EH'];
+    if (a2 && a2 !== '-99' && !countryFeatures[ISO2TO3[a2]]) {
+      countryFeatures[a2] = feat;
     }
   }
 
@@ -131,8 +141,8 @@ window.initCypher = function(data) {
       // Calculate MapLibre zoom for 95% fill (vertical viewport 1080x1920)
       // Width is constraining: lonSpan at zoom Z covers 360/2^Z * 256/1080 * tileSize
       const targetLonSpan = lonSpan / 0.95;
-      seg._mlZoom = Math.log2(360 / targetLonSpan) + 0.5;
-      seg._mlZoom = Math.max(2, Math.min(seg._mlZoom, 12));
+      seg._mlZoom = Math.log2(360 / targetLonSpan) + 2.0;
+      seg._mlZoom = Math.max(3, Math.min(seg._mlZoom, 14));
     } else {
       seg._mlZoom = seg.zoom || 4;
       seg._bounds = null;
@@ -168,37 +178,35 @@ function showHighlight(iso2, color, opacity) {
   clearHighlight();
   currentHighlightId = iso3;
 
-  // Fill
+  // Build robust filter: match ANY known ISO column
+  // Natural Earth uses ISO_A3, ISO_A3_EH, or ADM0_A3 depending on country
+  const f = ['any',
+    ['==', ['get', 'ISO_A3'], iso3],
+    ['==', ['get', 'ISO_A3_EH'], iso3],
+    ['==', ['get', 'ADM0_A3'], iso3],
+    ['==', ['get', 'ISO_A2'], iso2],
+    ['==', ['get', 'ISO_A2_EH'], iso2]
+  ];
+
+  // Fill — country color with visible opacity
   map.addLayer({
     id: 'cy-fill', type: 'fill', source: 'countries',
-    filter: ['any',
-      ['==', ['get', 'ISO_A3'], iso3],
-      ['==', ['get', 'ISO_A3_EH'], iso3],
-      ['==', ['get', 'ADM0_A3'], iso3]
-    ],
-    paint: { 'fill-color': color, 'fill-opacity': opacity || 0.45 }
+    filter: f,
+    paint: { 'fill-color': color || '#baa0da', 'fill-opacity': opacity || 0.55 }
   });
 
-  // Glow (wide blurred line)
+  // Glow — wide blurred white line for outer glow effect
   map.addLayer({
     id: 'cy-glow', type: 'line', source: 'countries',
-    filter: ['any',
-      ['==', ['get', 'ISO_A3'], iso3],
-      ['==', ['get', 'ISO_A3_EH'], iso3],
-      ['==', ['get', 'ADM0_A3'], iso3]
-    ],
-    paint: { 'line-color': '#ffffff', 'line-width': 10, 'line-blur': 6, 'line-opacity': 0.5 }
+    filter: f,
+    paint: { 'line-color': color || '#baa0da', 'line-width': 12, 'line-blur': 8, 'line-opacity': 0.6 }
   });
 
-  // Sharp border
+  // Sharp border — white outline
   map.addLayer({
     id: 'cy-border', type: 'line', source: 'countries',
-    filter: ['any',
-      ['==', ['get', 'ISO_A3'], iso3],
-      ['==', ['get', 'ISO_A3_EH'], iso3],
-      ['==', ['get', 'ADM0_A3'], iso3]
-    ],
-    paint: { 'line-color': '#ffffff', 'line-width': 2 }
+    filter: f,
+    paint: { 'line-color': '#ffffff', 'line-width': 2.5 }
   });
 }
 
@@ -357,11 +365,16 @@ window.applyStateAtTime = function(t) {
     map.jumpTo({ center: [camLon, camLat], zoom: targetZoom, pitch: 25, bearing: 0 });
 
     // ── HIGHLIGHT ──
-    const firstBrandTime = (seg.brands && seg.brands.length > 0)
-      ? seg.brands[0].word_frame / fps : Infinity;
-    if (t < firstBrandTime) {
+    // Show highlight for 0.3s after camera arrives, then fade when first logo appears
+    const transitionEnd = seg.start + TRANSITION_DURATION;
+    const highlightStart = transitionEnd;
+    const firstBrandAbsTime = (seg.brands && seg.brands.length > 0)
+      ? seg.brands[0].word_frame / fps : seg.end;
+    // Ensure highlight shows for at least 0.3s even if word_frame is early
+    const highlightEnd = Math.max(firstBrandAbsTime, transitionEnd + 0.3);
+    if (t >= highlightStart && t < highlightEnd) {
       showHighlight(seg.iso, map_config.country_color, map_config.country_opacity);
-    } else {
+    } else if (t >= highlightEnd) {
       clearHighlight();
     }
 
