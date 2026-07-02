@@ -86,11 +86,19 @@ async function main() {
   await page.waitForFunction(() => window.cypherReady === true, { timeout: 30000 });
   console.log('✅ CYPHER initialized');
 
-  // 8. Frame range
+  // 8. Frame range with absolute seamless continuity (no missing gap frames)
   const fps = meta.fps;
+  const segIdx = segments.indexOf(tgt[tgt.length - 1]);
+  const nextSeg = segIdx < segments.length - 1 ? segments[segIdx + 1] : null;
+
   const startFrame = Math.floor(tgt[0].start * fps);
-  const endFrame = Math.ceil(tgt[tgt.length - 1].end * fps);
-  const total = endFrame - startFrame;
+  // If there's a next segment, end exactly 1 frame before its start to avoid overlap/gaps
+  // If it's the last segment, render up to the absolute final frame of the video
+  const endFrame = nextSeg
+    ? Math.floor(nextSeg.start * fps) - 1
+    : (meta.total_frames ? meta.total_frames - 1 : Math.ceil(tgt[tgt.length - 1].end * fps));
+
+  const total = endFrame - startFrame + 1;
   console.log(`🎞️  Frames ${startFrame}→${endFrame} (${total} frames, ${(total/fps).toFixed(1)}s)`);
 
   // 9. Start FFmpeg
