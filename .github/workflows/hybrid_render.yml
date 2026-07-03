@@ -87,7 +87,7 @@ jobs:
           echo "=== Fonts copied ==="
           ls -la public/fonts/
 
-      - name: Prepare assets (GitHub API — auth-safe downloads)
+      - name: Prepare assets (Python urllib — auth-safe, strict=False)
         working-directory: F03_GAMMA/CODEBASE
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -97,75 +97,85 @@ jobs:
           mkdir -p public/images
           cp ../../SHARED/hybrid_spec.json public/
 
-          # ── Get release asset IDs via GitHub API ──
-          echo "=== Fetching release asset list ==="
-          ASSETS_JSON=$(curl -s \
-            -H "Authorization: token $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO_FULL/releases/tags/$RELEASE_TAG")
+          python3 << 'PYEOF'
+          import json, urllib.request, os, sys
 
-          # ── Helper: download asset by name via API (handles auth + redirect) ──
-          download_asset() {
-            local asset_name="$1"
-            local output_path="$2"
-            local asset_id=$(echo "$ASSETS_JSON" | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          for a in data.get('assets', []):
-              if a['name'] == '$asset_name':
-                  print(a['id'])
-                  break
-          ")
-            if [ -z "$asset_id" ]; then
-              echo "  ❌ Asset '$asset_name' not found in release $RELEASE_TAG"
-              return 1
-            fi
-            echo "  Downloading $asset_name (asset ID: $asset_id)..."
-            curl -sL \
-              -H "Authorization: token $GITHUB_TOKEN" \
-              -H "Accept: application/octet-stream" \
-              -o "$output_path" \
-              "https://api.github.com/repos/$REPO_FULL/releases/assets/$asset_id"
-            if [ -s "$output_path" ]; then
-              echo "    ✅ $asset_name: $(du -h "$output_path" | cut -f1)"
-              return 0
-            else
-              echo "    ❌ $asset_name: download failed (empty file)"
-              return 1
-            fi
+          token = os.environ["GITHUB_TOKEN"]
+          repo = os.environ["REPO_FULL"]
+          tag = os.environ["RELEASE_TAG"]
+          api_headers = {
+              "Authorization": f"token {token}",
+              "Accept": "application/vnd.github+json",
+              "User-Agent": "CYPHER-CI"
           }
 
-          # ── Download images.zip (FATAL if missing) ──
+          # 1. Get release by tag
+          url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+          req = urllib.request.Request(url, headers=api_headers)
+          with urllib.request.urlopen(req) as resp:
+              raw = resp.read()
+          release = json.loads(raw, strict=False)
+
+          assets = {a["name"]: a for a in release.get("assets", [])}
+          print(f"Release '{tag}' has {len(assets)} assets: {list(assets.keys())}")
+
+          # 2. Download helper via API endpoint (handles auth + redirect)
+          def download_asset(name, output_path, required=True):
+              if name not in assets:
+                  msg = f"  ❌ Asset '{name}' not found in release"
+                  if required:
+                      print(msg)
+                      sys.exit(1)
+                  else:
+                      print(f"  ⚠️ {msg} (optional, skipping)")
+                      return False
+
+              aid = assets[name]["id"]
+              dl_url = f"https://api.github.com/repos/{repo}/releases/assets/{aid}"
+              dl_headers = {
+                  "Authorization": f"token {token}",
+                  "Accept": "application/octet-stream",
+                  "User-Agent": "CYPHER-CI"
+              }
+              req = urllib.request.Request(dl_url, headers=dl_headers)
+              with urllib.request.urlopen(req) as resp:
+                  data = resp.read()
+
+              with open(output_path, "wb") as f:
+                  f.write(data)
+
+              size_kb = len(data) / 1024
+              print(f"  ✅ {name}: {size_kb:.0f} KB")
+              return True
+
+          # 3. Download images.zip (FATAL)
+          print("\n=== Downloading images.zip ===")
+          download_asset("images.zip", "public/images.zip", required=True)
+
+          # 4. Download audio_clean.mp3 (optional)
+          print("\n=== Downloading audio_clean.mp3 ===")
+          download_asset("audio_clean.mp3", "public/audio_clean.mp3", required=False)
+
+          # 5. Download timing.json (optional)
+          print("\n=== Downloading timing.json ===")
+          download_asset("timing.json", "public/timing.json", required=False)
+
+          print("\n=== All downloads complete ===")
+          PYEOF
+
+          # Unzip images
           echo ""
-          echo "=== Downloading images.zip ==="
-          if ! download_asset "images.zip" "public/images.zip"; then
-            echo "FATAL: images.zip is required for GAMMA render"
-            exit 1
-          fi
+          echo "=== Unzipping images ==="
           unzip -o public/images.zip -d public/images/
-          echo "  Unzipped images:"
           ls -la public/images/
 
-          # ── Download audio_clean.mp3 (optional but warned) ──
-          echo ""
-          echo "=== Downloading audio_clean.mp3 ==="
-          download_asset "audio_clean.mp3" "public/audio_clean.mp3" || echo "  ⚠️ No audio — video will be silent"
-
-          # ── Download timing.json (optional but warned) ──
-          echo ""
-          echo "=== Downloading timing.json ==="
-          download_asset "timing.json" "public/timing.json" || echo "  ⚠️ No timing — subtitles will use full text"
-
-          # ── Final inventory ──
+          # Final inventory
           echo ""
           echo "=== Final asset inventory ==="
-          echo "public/ contents:"
           ls -la public/
           echo ""
-          echo "public/images/ contents:"
           ls -la public/images/
           echo ""
-          echo "public/fonts/ contents:"
           ls -la public/fonts/
 
       - name: Render gamma chunk ${{ matrix.chunk }}
