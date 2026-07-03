@@ -83,34 +83,66 @@ jobs:
         run: |
           ln -sf /app/node_modules node_modules
           mkdir -p public/fonts
-          cp /app/public/fonts/*.woff2 public/fonts/ 2>/dev/null || true
-          echo "Fonts linked:"
+          cp /app/public/fonts/*.woff2 public/fonts/
+          echo "=== Fonts copied ==="
           ls -la public/fonts/
 
-      - name: Prepare assets
+      - name: Prepare assets (curl — pas de gh CLI dans Docker)
         working-directory: F03_GAMMA/CODEBASE
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.inputs.run_id }}
         run: |
           mkdir -p public/images
           cp ../../SHARED/hybrid_spec.json public/
 
-          # Download images from release
-          gh release download "${{ github.event.inputs.run_id }}" \
-            --pattern "images.zip" --dir public/ || true
-          if [ -f public/images.zip ]; then
+          # Download release assets via curl (gh CLI not available in Docker)
+          BASE_URL="https://$GITHUB_TOKEN@github.com/${{ github.repository }}/releases/download/$RELEASE_TAG"
+
+          echo "=== Downloading images.zip ==="
+          curl -sL -H "Authorization: token $GITHUB_TOKEN" \
+            -o public/images.zip \
+            "https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/images.zip"
+          if [ -f public/images.zip ] && [ -s public/images.zip ]; then
+            echo "  images.zip: $(du -h public/images.zip | cut -f1)"
             unzip -o public/images.zip -d public/images/
+            echo "  Unzipped files:"
+            ls -la public/images/
+          else
+            echo "  ❌ FATAL: images.zip missing or empty"
+            exit 1
           fi
 
-          # Download audio + timing
-          gh release download "${{ github.event.inputs.run_id }}" \
-            --pattern "audio_clean.mp3" --dir public/ || true
-          gh release download "${{ github.event.inputs.run_id }}" \
-            --pattern "timing.json" --dir public/ || true
+          echo "=== Downloading audio_clean.mp3 ==="
+          curl -sL -H "Authorization: token $GITHUB_TOKEN" \
+            -o public/audio_clean.mp3 \
+            "https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/audio_clean.mp3"
+          if [ -f public/audio_clean.mp3 ] && [ -s public/audio_clean.mp3 ]; then
+            echo "  audio_clean.mp3: $(du -h public/audio_clean.mp3 | cut -f1)"
+          else
+            echo "  ⚠️ audio_clean.mp3 missing (video will have no audio)"
+          fi
 
-          echo "Assets ready:"
-          ls -la public/images/ || true
-          ls -la public/*.mp3 public/*.json || true
+          echo "=== Downloading timing.json ==="
+          curl -sL -H "Authorization: token $GITHUB_TOKEN" \
+            -o public/timing.json \
+            "https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG/timing.json"
+          if [ -f public/timing.json ] && [ -s public/timing.json ]; then
+            echo "  timing.json: $(du -h public/timing.json | cut -f1)"
+          else
+            echo "  ⚠️ timing.json missing (subtitles will use full text)"
+          fi
+
+          echo ""
+          echo "=== Final asset inventory ==="
+          echo "public/ contents:"
+          ls -la public/
+          echo ""
+          echo "public/images/ contents:"
+          ls -la public/images/
+          echo ""
+          echo "public/fonts/ contents:"
+          ls -la public/fonts/
 
       - name: Render gamma chunk ${{ matrix.chunk }}
         working-directory: F03_GAMMA/CODEBASE
