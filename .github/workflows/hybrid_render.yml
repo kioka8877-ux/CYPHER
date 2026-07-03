@@ -5,7 +5,7 @@ on:
     inputs:
       run_id:
         description: "Release tag for assets"
-        default: "CYP_HYBRID_20260702"
+        default: "CYP_HYBRID_20260703"
 
 permissions:
   contents: write
@@ -19,7 +19,6 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        # Cypher chunk IDs (dynamically read from hybrid_spec.json)
         chunk: [1, 3, 5, 7, 9]
       fail-fast: false
     steps:
@@ -40,14 +39,14 @@ jobs:
 
       - name: Download assets
         working-directory: F03_DEATHWING/CODEBASE
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p assets
           cp ../../SHARED/hybrid_spec.json assets/
           # Download US states GeoJSON
           curl -sL -o assets/us_states.geojson \
             "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Render chunk ${{ matrix.chunk }}
         working-directory: F03_DEATHWING/CODEBASE
@@ -70,7 +69,6 @@ jobs:
     timeout-minutes: 20
     strategy:
       matrix:
-        # Gamma chunk IDs (dynamically read from hybrid_spec.json)
         chunk: [0, 2, 4, 6, 8]
       fail-fast: false
     steps:
@@ -91,10 +89,12 @@ jobs:
 
       - name: Prepare assets
         working-directory: F03_GAMMA/CODEBASE
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p public/images public/fonts
           cp ../../SHARED/hybrid_spec.json public/
-          # Download images from release if available
+          # Download images from release
           gh release download "${{ github.event.inputs.run_id }}" \
             --pattern "images.zip" --dir public/ || true
           if [ -f public/images.zip ]; then
@@ -106,8 +106,6 @@ jobs:
           # Download timing.json
           gh release download "${{ github.event.inputs.run_id }}" \
             --pattern "timing.json" --dir public/ || true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Render gamma chunk ${{ matrix.chunk }}
         working-directory: F03_GAMMA/CODEBASE
@@ -165,23 +163,22 @@ jobs:
         run: ls -la chunks/
 
       - name: Download audio
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release download "${{ github.event.inputs.run_id }}" \
             --pattern "audio_clean.mp3" --dir . || true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Concat chunks in hybrid_spec order
         run: |
-          # Read chunk IDs in order from hybrid_spec.json
           python3 -c "
           import json
           spec = json.load(open('SHARED/hybrid_spec.json'))
           with open('concat.txt', 'w') as f:
-            for chunk in spec['chunks']:
-              cid = chunk['id']
-              path = f'chunks/chunk_{cid}.mp4'
-              f.write(f\"file '{path}'\n\")
+              for chunk in spec['chunks']:
+                  cid = chunk['id']
+                  path = f'chunks/chunk_{cid}.mp4'
+                  f.write(f"file '{path}'\n")
           print('concat.txt written')
           "
           cat concat.txt
@@ -206,10 +203,10 @@ jobs:
 
       - name: Upload to release
         continue-on-error: true
-        run: |
-          gh release upload "${{ github.event.inputs.run_id }}" cypher_final.mp4 --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.inputs.run_id }}" cypher_final.mp4 --clobber
 
   # ═══════════════════════════════════════════════════════════════
   # JOB 4: F05 LUTHER — strip metadata
@@ -262,7 +259,7 @@ jobs:
 
       - name: Upload to release
         continue-on-error: true
-        run: |
-          gh release upload "${{ github.event.inputs.run_id }}" clean_final.mp4 --clobber
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.inputs.run_id }}" clean_final.mp4 --clobber
