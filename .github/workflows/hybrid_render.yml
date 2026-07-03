@@ -65,7 +65,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   render-gamma:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     strategy:
       matrix:
         chunk: [0, 2, 4, 6, 8]
@@ -77,31 +77,44 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install system deps
+      - name: Install system deps + fonts
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-liberation chromium-browser || true
+          sudo apt-get install -y ffmpeg fonts-liberation fonts-crosextra-carlito fonts-noto || true
 
       - name: Install npm dependencies
         working-directory: F03_GAMMA/CODEBASE
         run: npm install
 
-      - name: Prepare assets
+      - name: Prepare assets + fonts
         working-directory: F03_GAMMA/CODEBASE
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p public/images public/fonts
           cp ../../SHARED/hybrid_spec.json public/
+
+          # Download images from release
           gh release download "${{ github.event.inputs.run_id }}" \
             --pattern "images.zip" --dir public/ || true
           if [ -f public/images.zip ]; then
             unzip -o public/images.zip -d public/images/
           fi
+
+          # Download audio + timing
           gh release download "${{ github.event.inputs.run_id }}" \
             --pattern "audio_clean.mp3" --dir public/ || true
           gh release download "${{ github.event.inputs.run_id }}" \
             --pattern "timing.json" --dir public/ || true
+
+          # Copy system fonts as fallback (Liberation Sans ≈ Arial)
+          cp /usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf public/fonts/ 2>/dev/null || true
+          cp /usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf public/fonts/ 2>/dev/null || true
+          cp /usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf public/fonts/ 2>/dev/null || true
+          cp /usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf public/fonts/ 2>/dev/null || true
+
+          echo "Fonts available in public/fonts/:"
+          ls -la public/fonts/ || true
 
       - name: Render gamma chunk ${{ matrix.chunk }}
         working-directory: F03_GAMMA/CODEBASE
@@ -126,7 +139,8 @@ jobs:
 
           npx remotion render src/index.jsx CypherGamma chunk_${{ matrix.chunk }}.mp4 \
             --frames=$START_FRAME-$END_FRAME \
-            --gl=swangle
+            --gl=swangle \
+            --concurrency=2
 
       - uses: actions/upload-artifact@v4
         with:
