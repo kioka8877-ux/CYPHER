@@ -1,5 +1,5 @@
-// src/index.jsx — F03 SIGISMUND — Point d'entrée Remotion
+// src/index.jsx — F03 GAMMA entry point
 import { registerRoot } from "remotion";
-import { Root } from "./Root";
+import { RemotionRoot } from "./Root";
 
-registerRoot(Root);
+registerRoot(RemotionRoot);
