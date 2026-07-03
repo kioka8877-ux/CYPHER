@@ -35,7 +35,7 @@ export const Main = ({ timing, roadmap }) => {
         if (dur <= 0) return null;
 
         // Correspondance 1-à-1 : timeline[idx] ↔ timing.segments[idx]
-        const timingSeg = timing.segments[idx] || null;
+        const timingSeg = timing?.segments?.[idx] || null;
 
         return (
           <Sequence
@@ -55,7 +55,7 @@ export const Main = ({ timing, roadmap }) => {
       })}
 
       {/* Piste audio */}
-      <Audio src={staticFile("audio_clean.mp3")} />
+      {timing && <Audio src={staticFile("audio_clean.mp3")} />}
     </AbsoluteFill>
   );
 };
