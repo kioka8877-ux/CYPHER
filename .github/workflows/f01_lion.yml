@@ -31,7 +31,7 @@ jobs:
 
       - name: Télécharger audio depuis GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p /tmp/f01_in
           gh release download "${{ github.event.inputs.run_id }}" \
@@ -79,7 +79,7 @@ jobs:
               t = json.load(f)
           meta  = t.get('meta', {})
           words = t.get('words', [])
-          print(f'[F01B] Durée: {meta.get(\"duration_seconds\", \"?\")}s | Frames: {meta.get(\"total_frames\", \"?\")} | Mots: {len(words)}')
+          print(f'[F01B] Durée: {meta.get("duration_seconds", "?")}s | Frames: {meta.get("total_frames", "?")} | Mots: {len(words)}')
           "
 
       - name: Upload artefacts F01
@@ -91,3 +91,14 @@ jobs:
             /tmp/f01_out/timing.json
             /tmp/f01_out/silence_map.json
           retention-days: 7
+
+      - name: Upload to release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.inputs.run_id }}" \
+            /tmp/f01_out/audio_clean.mp3 \
+            /tmp/f01_out/timing.json \
+            /tmp/f01_out/silence_map.json \
+            --clobber
