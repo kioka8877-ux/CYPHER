@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=1080, height=1920">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CYPHER DEATHWING — Hybrid Travel Mode</title>
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0a0a12; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a12; }
   #map { width: 100%; height: 100%; }
 
   /* State name overlay — appears on landing */
@@ -38,25 +38,25 @@
 <script>
 'use strict';
 
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // GLOBALS
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 let map, hybridData;
 let currentHighlightId = null;
 window.mapReady = false;
 window.hybridReady = false;
 
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // EASING
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 function easeInOutCubic(t) {
   return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3) / 2;
 }
 function lerp(a, b, t) { return a + (b-a) * t; }
 
-// ══════════════════════════════════════════════════════════════
-// MAP INIT
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// MAP INIT — dimensions dynamiques (vertical ou horizontal)
+// ═══════════════════════════════════════════════════════════════
 map = new maplibregl.Map({
   container: 'map',
   style: {
@@ -82,9 +82,9 @@ map.on('load', () => {
   window.mapReady = true;
 });
 
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // INIT HYBRID
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 window.initHybrid = function(data) {
   hybridData = data;
   const { geojson, cypher_config } = data;
@@ -97,9 +97,9 @@ window.initHybrid = function(data) {
   window.hybridReady = true;
 };
 
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // HIGHLIGHT
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 function showHighlight(stateIso, color, opacity) {
   if (currentHighlightId === stateIso) return;
   clearHighlight();
@@ -137,9 +137,9 @@ function clearHighlight() {
   currentHighlightId = null;
 }
 
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // STATE LABEL
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 function showStateLabel(name) {
   const el = document.querySelector('#state-label .name');
   el.textContent = name;
@@ -150,9 +150,9 @@ function hideStateLabel() {
   document.querySelector('#state-label .name').classList.remove('visible');
 }
 
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // TRAVEL STATE MACHINE
-// ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 let _prevChunkId = -1;
 
 window.applyTravelState = function(t, chunkId) {
