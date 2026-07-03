@@ -5,14 +5,19 @@
     "width": 1080,
     "height": 1920,
     "audio": "audio_clean.mp3",
-    "title": "Top 10 US Snowfall States",
+    "title": "Top 4 US States with Heaviest Student Debt",
     "version": "1.0",
-    "engines": ["cypher", "gamma"]
+    "engines": [
+      "cypher",
+      "gamma"
+    ],
+    "duration_seconds": 60.52,
+    "total_frames": 1816
   },
   "cypher_config": {
     "map_style": "satellite",
     "tile_url": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    "highlight_color": "#A0D2DB",
+    "highlight_color": "#E63946",
     "highlight_opacity": 0.45,
     "transition_easing": "easeInOutCubic"
   },
@@ -21,7 +26,7 @@
     "font_accent": "Playfair Display",
     "subtitle_size": 44,
     "subtitle_color": "#FFFFFF",
-    "accent_color": "#A0D2DB",
+    "accent_color": "#E63946",
     "background_color": "#0a0a12",
     "grain_intensity": 0.12,
     "vignette": true
@@ -29,242 +34,155 @@
   "chunks": [
     {
       "id": 0,
-      "engine": "cypher",
-      "start": 0.00,
-      "end": 3.50,
-      "action": "travel",
-      "from": { "lon": -98.5, "lat": 39.8, "zoom": 2.5 },
-      "to":   { "lon": -72.58, "lat": 44.05, "zoom": 6.5 },
-      "state_name": "Vermont",
-      "state_iso": "VT"
+      "engine": "gamma",
+      "start": 0.0,
+      "end": 9.18,
+      "image_file": "intro_student_debt.png",
+      "media_type": "image",
+      "overlay_type": "defaut",
+      "text_subtitles": "In the United States, student debt is reaching record highs. In certain states, students are hit especially hard. Here are the four states with the heaviest debt burdens.",
+      "state_name": "Introduction"
     },
     {
       "id": 1,
-      "engine": "gamma",
-      "start": 3.50,
-      "end": 9.00,
-      "image_file": "vermont_snow.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "Vermont. 89 inches of snow per year. Entire villages vanish under white silence.",
-      "state_name": "Vermont",
-      "snowfall_inches": 89.25
+      "engine": "cypher",
+      "start": 9.18,
+      "end": 11.78,
+      "action": "travel",
+      "from": {
+        "lon": -98.5,
+        "lat": 39.8,
+        "zoom": 3.0
+      },
+      "to": {
+        "lon": -76.64,
+        "lat": 39.05,
+        "zoom": 7.0
+      },
+      "state_name": "Maryland",
+      "state_iso": "MD"
     },
     {
       "id": 2,
-      "engine": "cypher",
-      "start": 9.00,
-      "end": 12.00,
-      "action": "travel",
-      "from": { "lon": -72.58, "lat": 44.05, "zoom": 6.5 },
-      "to":   { "lon": -69.44, "lat": 45.25, "zoom": 6.0 },
-      "state_name": "Maine",
-      "state_iso": "ME"
+      "engine": "gamma",
+      "start": 11.78,
+      "end": 21.16,
+      "image_file": "maryland_debt.png",
+      "media_type": "image",
+      "overlay_type": "defaut",
+      "text_subtitles": "Maryland ranks first with an average debt of over $45,000 per student. This burden weighs on tens of thousands of young graduates. Life after college there often starts under the shadow of repayment.",
+      "state_name": "Maryland",
+      "debt_avg": 45000
     },
     {
       "id": 3,
-      "engine": "gamma",
-      "start": 12.00,
-      "end": 17.50,
-      "image_file": "maine_snow.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "Maine. 78 inches. The northernmost state in New England doesn't fight winter. It surrenders.",
-      "state_name": "Maine",
-      "snowfall_inches": 77.8
+      "engine": "cypher",
+      "start": 21.16,
+      "end": 23.7,
+      "action": "travel",
+      "from": {
+        "lon": -76.64,
+        "lat": 39.05,
+        "zoom": 7.0
+      },
+      "to": {
+        "lon": -83.64,
+        "lat": 32.68,
+        "zoom": 6.5
+      },
+      "state_name": "Georgia",
+      "state_iso": "GA"
     },
     {
       "id": 4,
-      "engine": "cypher",
-      "start": 17.50,
-      "end": 20.50,
-      "action": "travel",
-      "from": { "lon": -69.44, "lat": 45.25, "zoom": 6.0 },
-      "to":   { "lon": -71.57, "lat": 43.20, "zoom": 6.5 },
-      "state_name": "New Hampshire",
-      "state_iso": "NH"
+      "engine": "gamma",
+      "start": 23.7,
+      "end": 34.14,
+      "image_file": "georgia_debt.png",
+      "media_type": "image",
+      "overlay_type": "defaut",
+      "text_subtitles": "Georgia follows closely, with an average hovering around $43,000. Nearly 15.4% of the adult population there carries student debt, a financial weight that slows down an entire generation's takeoff point.",
+      "state_name": "Georgia",
+      "debt_avg": 43000
     },
     {
       "id": 5,
-      "engine": "gamma",
-      "start": 20.50,
-      "end": 25.50,
-      "image_file": "newhampshire_snow.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "New Hampshire. 71 inches. Mount Washington holds the record for the worst weather on Earth.",
-      "state_name": "New Hampshire",
-      "snowfall_inches": 71.4
+      "engine": "cypher",
+      "start": 34.14,
+      "end": 36.66,
+      "action": "travel",
+      "from": {
+        "lon": -83.64,
+        "lat": 32.68,
+        "zoom": 6.5
+      },
+      "to": {
+        "lon": -78.17,
+        "lat": 37.77,
+        "zoom": 6.5
+      },
+      "state_name": "Virginia",
+      "state_iso": "VA"
     },
     {
       "id": 6,
-      "engine": "cypher",
-      "start": 25.50,
-      "end": 28.50,
-      "action": "travel",
-      "from": { "lon": -71.57, "lat": 43.20, "zoom": 6.5 },
-      "to":   { "lon": -105.78, "lat": 39.55, "zoom": 5.5 },
-      "state_name": "Colorado",
-      "state_iso": "CO"
+      "engine": "gamma",
+      "start": 36.66,
+      "end": 45.12,
+      "image_file": "virginia_debt.png",
+      "media_type": "image",
+      "overlay_type": "defaut",
+      "text_subtitles": "In Virginia, the average debt exceeds $41,000 per borrower. The high cost of living in the region only makes matters worse. The result? Years of repayment before seeing the light at the end of the tunnel.",
+      "state_name": "Virginia",
+      "debt_avg": 41000
     },
     {
       "id": 7,
-      "engine": "gamma",
-      "start": 28.50,
-      "end": 33.50,
-      "image_file": "colorado_snow.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "Colorado. 68 inches. The Rockies collect snow like a vault collects gold.",
-      "state_name": "Colorado",
-      "snowfall_inches": 67.5
+      "engine": "cypher",
+      "start": 45.12,
+      "end": 47.6,
+      "action": "travel",
+      "from": {
+        "lon": -78.17,
+        "lat": 37.77,
+        "zoom": 6.5
+      },
+      "to": {
+        "lon": -81.76,
+        "lat": 28.68,
+        "zoom": 6.0
+      },
+      "state_name": "Florida",
+      "state_iso": "FL"
     },
     {
       "id": 8,
-      "engine": "cypher",
-      "start": 33.50,
-      "end": 36.50,
-      "action": "travel",
-      "from": { "lon": -105.78, "lat": 39.55, "zoom": 5.5 },
-      "to":   { "lon": -153.40, "lat": 64.20, "zoom": 4.0 },
-      "state_name": "Alaska",
-      "state_iso": "AK"
+      "engine": "gamma",
+      "start": 47.6,
+      "end": 60.12,
+      "image_file": "florida_debt.png",
+      "media_type": "image",
+      "overlay_type": "defaut",
+      "text_subtitles": "Finally, Florida closes this ranking with an average debt of over $40,600. With 2.7 million borrowers, the state accumulates over $108 billion in student debt. This massive indebtedness drags down the local economy.",
+      "state_name": "Florida",
+      "debt_avg": 40600
     },
     {
       "id": 9,
-      "engine": "gamma",
-      "start": 36.50,
-      "end": 42.00,
-      "image_file": "alaska_snow.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "Alaska. 65 inches. But in Valdez, it's 326 inches. Twenty-seven feet of frozen chaos.",
-      "state_name": "Alaska",
-      "snowfall_inches": 64.5
-    },
-    {
-      "id": 10,
       "engine": "cypher",
-      "start": 42.00,
-      "end": 44.50,
-      "action": "travel",
-      "from": { "lon": -153.40, "lat": 64.20, "zoom": 4.0 },
-      "to":   { "lon": -84.50, "lat": 44.30, "zoom": 5.5 },
-      "state_name": "Michigan",
-      "state_iso": "MI"
-    },
-    {
-      "id": 11,
-      "engine": "gamma",
-      "start": 44.50,
-      "end": 49.00,
-      "image_file": "michigan_snow.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "Michigan. 62 inches. The Great Lakes generate their own storms. Lake effect doesn't ask permission.",
-      "state_name": "Michigan",
-      "snowfall_inches": 61.7
-    },
-    {
-      "id": 12,
-      "engine": "cypher",
-      "start": 49.00,
-      "end": 51.50,
-      "action": "travel",
-      "from": { "lon": -84.50, "lat": 44.30, "zoom": 5.5 },
-      "to":   { "lon": -75.00, "lat": 43.00, "zoom": 5.5 },
-      "state_name": "New York",
-      "state_iso": "NY"
-    },
-    {
-      "id": 13,
-      "engine": "gamma",
-      "start": 51.50,
-      "end": 55.00,
-      "image_file": "newyork_snow.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "New York. 60 inches. Buffalo gets buried. Syracuse never thaws. The snow belt is merciless.",
-      "state_name": "New York",
-      "snowfall_inches": 59.8
-    },
-    {
-      "id": 14,
-      "engine": "cypher",
-      "start": 55.00,
-      "end": 57.00,
-      "action": "travel",
-      "from": { "lon": -75.00, "lat": 43.00, "zoom": 5.5 },
-      "to":   { "lon": -107.50, "lat": 43.00, "zoom": 5.5 },
-      "state_name": "Wyoming",
-      "state_iso": "WY"
-    },
-    {
-      "id": 15,
-      "engine": "gamma",
-      "start": 57.00,
-      "end": 61.00,
-      "image_file": "wyoming_snow.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "Wyoming. 55 inches. The wind doesn't just bring snow. It weaponizes it.",
-      "state_name": "Wyoming",
-      "snowfall_inches": 54.7
-    },
-    {
-      "id": 16,
-      "engine": "cypher",
-      "start": 61.00,
-      "end": 63.00,
-      "action": "travel",
-      "from": { "lon": -107.50, "lat": 43.00, "zoom": 5.5 },
-      "to":   { "lon": -94.68, "lat": 46.73, "zoom": 5.5 },
-      "state_name": "Minnesota",
-      "state_iso": "MN"
-    },
-    {
-      "id": 17,
-      "engine": "gamma",
-      "start": 63.00,
-      "end": 67.00,
-      "image_file": "minnesota_snow.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "Minnesota. 54 inches. They call it the Land of 10,000 Lakes. In winter, they're all frozen.",
-      "state_name": "Minnesota",
-      "snowfall_inches": 54.2
-    },
-    {
-      "id": 18,
-      "engine": "cypher",
-      "start": 67.00,
-      "end": 69.00,
-      "action": "travel",
-      "from": { "lon": -94.68, "lat": 46.73, "zoom": 5.5 },
-      "to":   { "lon": -71.38, "lat": 42.41, "zoom": 6.0 },
-      "state_name": "Massachusetts",
-      "state_iso": "MA"
-    },
-    {
-      "id": 19,
-      "engine": "gamma",
-      "start": 69.00,
-      "end": 73.00,
-      "image_file": "massachusetts_snow.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "Massachusetts. 56 inches. Boston shuts down. The T stops running. And still, the snow keeps coming.",
-      "state_name": "Massachusetts",
-      "snowfall_inches": 55.6
-    },
-    {
-      "id": 20,
-      "engine": "cypher",
-      "start": 73.00,
-      "end": 76.00,
+      "start": 60.12,
+      "end": 60.52,
       "action": "travel_out",
-      "from": { "lon": -71.38, "lat": 42.41, "zoom": 6.0 },
-      "to":   { "lon": -98.50, "lat": 39.80, "zoom": 2.5 },
+      "from": {
+        "lon": -81.76,
+        "lat": 28.68,
+        "zoom": 6.0
+      },
+      "to": {
+        "lon": -98.5,
+        "lat": 39.8,
+        "zoom": 3.0
+      },
       "state_name": "USA",
       "state_iso": "US"
     }
