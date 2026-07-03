@@ -44,7 +44,6 @@ jobs:
         run: |
           mkdir -p assets
           cp ../../SHARED/hybrid_spec.json assets/
-          # Download US states GeoJSON
           curl -sL -o assets/us_states.geojson \
             "https://raw.githubusercontent.com/PublicaMundi/MappingAPI/master/data/geojson/us-states.json"
 
@@ -94,23 +93,19 @@ jobs:
         run: |
           mkdir -p public/images public/fonts
           cp ../../SHARED/hybrid_spec.json public/
-          # Download images from release
           gh release download "${{ github.event.inputs.run_id }}" \
             --pattern "images.zip" --dir public/ || true
           if [ -f public/images.zip ]; then
             unzip -o public/images.zip -d public/images/
           fi
-          # Download audio
           gh release download "${{ github.event.inputs.run_id }}" \
             --pattern "audio_clean.mp3" --dir public/ || true
-          # Download timing.json
           gh release download "${{ github.event.inputs.run_id }}" \
             --pattern "timing.json" --dir public/ || true
 
       - name: Render gamma chunk ${{ matrix.chunk }}
         working-directory: F03_GAMMA/CODEBASE
         run: |
-          # Calculate frame range for this chunk
           CHUNK_ID=${{ matrix.chunk }}
           START_FRAME=$(python3 -c "
           import json
@@ -129,11 +124,9 @@ jobs:
           FRAMES=$((END_FRAME - START_FRAME + 1))
           echo "Rendering chunk $CHUNK_ID: frames $START_FRAME→$END_FRAME ($FRAMES frames)"
 
-          npx remotion render \
-            --composition CypherGamma \
+          npx remotion render src/index.jsx CypherGamma chunk_${{ matrix.chunk }}.mp4 \
             --frames=$START_FRAME-$END_FRAME \
-            --gl=swangle \
-            --output chunk_${{ matrix.chunk }}.mp4
+            --gl=swangle
 
       - uses: actions/upload-artifact@v4
         with:
