@@ -3,6 +3,7 @@
 // This config sets defaults; Root.jsx overrides via Composition props.
 import { Config } from "@remotion/cli/config";
 
+Config.setEntryPoint("src/index.jsx");
 Config.setVideoImageFormat("jpeg");
 Config.setOverwriteOutput(true);
 Config.setConcurrency(1);
