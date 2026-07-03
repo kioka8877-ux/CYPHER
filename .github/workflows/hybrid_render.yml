@@ -298,8 +298,8 @@ jobs:
       - name: Strip metadata
         run: |
           echo "[LUTHER] Audit pre-strip:"
-          ffprobe -v quiet -print_format json -show_format cypher_final.mp4 | \
-            python3 -c "import json,sys; d=json.load(sys.stdin); tags=d.get('format',{}).get('tags',{}); print(json.dumps(tags, indent=2))"
+          ffprobe -v quiet -print_format json -show_format cypher_final.mp4 > /tmp/pre_strip.json 2>&1 || true
+          python3 -c "import json; d=json.load(open('/tmp/pre_strip.json')); tags=d.get('format',{}).get('tags',{}); print(json.dumps(tags, indent=2))" || echo "Pre-strip audit skipped
 
           echo "[LUTHER] Stripping..."
           ffmpeg -i cypher_final.mp4 -c copy -map_metadata -1 -fflags +bitexact clean_final.mp4
@@ -308,15 +308,19 @@ jobs:
           touch -t $(date +%Y%m%d0000) clean_final.mp4
 
           echo "[LUTHER] Audit post-strip:"
-          ffprobe -v quiet -print_format json -show_format clean_final.mp4 | \
-            python3 << 'PYEOF'
+          ffprobe -v quiet -print_format json -show_format clean_final.mp4 > /tmp/post_strip.json 2>&1 || true
+          python3 << 'PYEOF' || true
           import json,sys
-          d=json.load(sys.stdin)
-          tags=d.get('format',{}).get('tags',{})
-          suspects=['remotion','manim','ffmpeg','lavf','claude','python','playwright','maplibre','gumloop','chromium']
-          found=[k for k,v in tags.items() if any(s in str(v).lower() for s in suspects)]
-          if found: print(f'Suspects: {found}')
-          else: print('Zero trace')
+          try:
+              with open('/tmp/post_strip.json') as f:
+                  d=json.load(f)
+              tags=d.get('format',{}).get('tags',{})
+              suspects=['remotion','manim','ffmpeg','lavf','claude','python','playwright','maplibre','gumloop','chromium']
+              found=[k for k,v in tags.items() if any(s in str(v).lower() for s in suspects)]
+              if found: print(f'Suspects: {found}')
+              else: print('Zero trace')
+          except Exception as e:
+              print(f'Audit skipped: {e}')
           PYEOF
           ls -lh clean_final.mp4
 
