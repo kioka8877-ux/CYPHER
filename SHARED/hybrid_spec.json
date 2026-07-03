@@ -6,7 +6,7 @@
     "height": 1080,
     "audio": "audio_clean.mp3",
     "title": "Top 4 US States with Heaviest Student Debt",
-    "version": "1.1",
+    "version": "1.2",
     "engines": [
       "cypher",
       "gamma"
@@ -28,7 +28,7 @@
     "subtitle_color": "#FFFFFF",
     "accent_color": "#E63946",
     "background_color": "#0a0a12",
-    "grain_intensity": 0.12,
+    "grain_intensity": 0,
     "vignette": true
   },
   "chunks": [
