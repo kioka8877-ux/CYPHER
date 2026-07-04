@@ -202,7 +202,8 @@ jobs:
           npx remotion render src/index.jsx CypherGamma chunk_${{ matrix.chunk }}.mp4 \
             --frames=$START_FRAME-$END_FRAME \
             --gl=swangle \
-            --concurrency=2
+            --concurrency=2 \
+            --browser-executable=/usr/bin/chromium
 
       - uses: actions/upload-artifact@v4
         with:
