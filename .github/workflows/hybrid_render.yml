@@ -66,7 +66,7 @@ jobs:
   # ═══════════════════════════════════════════════════════════════
   render-gamma:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     container:
       image: ghcr.io/kioka8877-ux/cypher-gamma:latest
       env:
@@ -201,7 +201,7 @@ jobs:
             --image-format=jpeg \
             --gl=swangle \
             --frames=$START_FRAME-$END_FRAME \
-            --concurrency=4 \
+            --concurrency=2 \
             --timeout=60000 \
             --browser-executable=$CHROME
 
