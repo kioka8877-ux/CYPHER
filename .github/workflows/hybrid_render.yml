@@ -81,58 +81,85 @@ jobs:
       - name: Setup — deps + fonts from Docker image
         working-directory: F03_GAMMA/CODEBASE
         run: |
-          # Copy node_modules from Docker image (like CRUSADER)
           cp -r /app/node_modules node_modules
-
-          # Copy fonts from Docker image
           mkdir -p public/fonts
           cp /app/public/fonts/*.woff2 public/fonts/
-
           FONT_COUNT=$(ls public/fonts/*.woff2 2>/dev/null | wc -l)
           echo "[FONTS] $FONT_COUNT polices copiées"
-          if [ "$FONT_COUNT" -lt 10 ]; then
-            echo "⚠️ Fonts manquantes — fallback: download"
-            node docker-fonts-dl.js || true
-            cp /crusader-fonts/*.woff2 public/fonts/ 2>/dev/null || true
-          fi
           ls -la public/fonts/
 
-      - name: Download assets (wget — like CRUSADER)
+      - name: Download assets (Python urllib — proven method from Run #9)
         working-directory: F03_GAMMA/CODEBASE
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_TAG: ${{ github.event.inputs.run_id }}
+          REPO_FULL: ${{ github.repository }}
         run: |
           mkdir -p public/images
           cp ../../SHARED/hybrid_spec.json public/
 
-          BASE_URL="https://github.com/${{ github.repository }}/releases/download/$RELEASE_TAG"
+          python3 << 'PYEOF'
+          import json, urllib.request, os, sys
 
-          for FNAME in images.zip audio_clean.mp3 timing.json; do
-            if wget -q \
-              --header="Authorization: token $GH_TOKEN" \
-              -O "public/$FNAME" \
-              "${BASE_URL}/${FNAME}" 2>/dev/null; then
-              SIZE=$(du -h "public/$FNAME" | cut -f1)
-              echo "[ASSETS] $FNAME — ${SIZE} ✅"
-            else
-              echo "[ASSETS] $FNAME — ECHEC (ignoré)"
-              rm -f "public/$FNAME"
-            fi
-          done
+          token = os.environ["GITHUB_TOKEN"]
+          repo = os.environ["REPO_FULL"]
+          tag = os.environ["RELEASE_TAG"]
+          api_headers = {
+              "Authorization": f"token {token}",
+              "Accept": "application/vnd.github+json",
+              "User-Agent": "CYPHER-CI"
+          }
 
-          if [ -f public/images.zip ]; then
-            unzip -q -o public/images.zip -d public/images/
-            echo "[ASSETS] Images extraites: $(ls public/images/ | wc -l) fichiers"
-          else
-            echo "❌ FATAL: images.zip manquant"
-            exit 1
-          fi
+          # 1. Get release by tag
+          url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+          req = urllib.request.Request(url, headers=api_headers)
+          with urllib.request.urlopen(req) as resp:
+              raw = resp.read()
+          release = json.loads(raw, strict=False)
 
+          assets = {a["name"]: a for a in release.get("assets", [])}
+          print(f"Release '{tag}' has {len(assets)} assets: {list(assets.keys())}")
+
+          def download_asset(name, output_path, required=True):
+              if name not in assets:
+                  if required:
+                      print(f"  ❌ FATAL: '{name}' not found")
+                      sys.exit(1)
+                  else:
+                      print(f"  ⚠️ '{name}' not found (optional)")
+                      return False
+              aid = assets[name]["id"]
+              dl_url = f"https://api.github.com/repos/{repo}/releases/assets/{aid}"
+              dl_headers = {
+                  "Authorization": f"token {token}",
+                  "Accept": "application/octet-stream",
+                  "User-Agent": "CYPHER-CI"
+              }
+              req = urllib.request.Request(dl_url, headers=dl_headers)
+              with urllib.request.urlopen(req) as resp:
+                  data = resp.read()
+              with open(output_path, "wb") as f:
+                  f.write(data)
+              print(f"  ✅ {name}: {len(data)/1024:.0f} KB")
+              return True
+
+          print("\n=== Downloading images.zip ===")
+          download_asset("images.zip", "public/images.zip", required=True)
+
+          print("\n=== Downloading audio_clean.mp3 ===")
+          download_asset("audio_clean.mp3", "public/audio_clean.mp3", required=False)
+
+          print("\n=== Downloading timing.json ===")
+          download_asset("timing.json", "public/timing.json", required=False)
+
+          print("\n=== All downloads complete ===")
+          PYEOF
+
+          # Unzip images
           echo ""
-          echo "=== Asset inventory ==="
-          ls -la public/
-          echo ""
+          echo "=== Unzipping images ==="
+          unzip -q -o public/images.zip -d public/images/
+          echo "Images: $(ls public/images/ | wc -l) fichiers"
           ls -la public/images/
 
       - name: Render gamma chunk ${{ matrix.chunk }} (--sequence mode)
@@ -159,7 +186,6 @@ jobs:
 
           CHROME=$(which chromium 2>/dev/null || which chromium-browser 2>/dev/null || echo "/usr/bin/chromium")
           echo "[CHROME] Using: $CHROME"
-          $CHROME --version 2>/dev/null || true
 
           START_TS=$(date +%s)
 
@@ -182,7 +208,7 @@ jobs:
           FRAME_COUNT=$(ls $FRAMES_DIR/*.jpeg 2>/dev/null | wc -l)
           echo "[CHUNK $CHUNK_ID] $FRAME_COUNT frames JPEG rendues"
 
-          # ── Encoder JPEG → MP4 (video-only, audio muxé au concat final) ──
+          # ── Encoder JPEG → MP4 ──
           ffmpeg -y \
             -framerate $FPS \
             -pattern_type glob -i "$FRAMES_DIR/*.jpeg" \
@@ -227,12 +253,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          wget -q \
-            --header="Authorization: token $GH_TOKEN" \
-            -O audio_clean.mp3 \
-            "https://github.com/${{ github.repository }}/releases/download/${{ github.event.inputs.run_id }}/audio_clean.mp3" \
-            && echo "[AUDIO] ✅ $(du -h audio_clean.mp3 | cut -f1)" \
-            || echo "[AUDIO] ⚠️ absent"
+          gh release download "${{ github.event.inputs.run_id }}" \
+            --pattern "audio_clean.mp3" --dir . || true
 
       - name: Concat chunks in hybrid_spec order
         run: |
