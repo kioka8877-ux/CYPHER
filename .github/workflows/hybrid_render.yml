@@ -201,7 +201,7 @@ jobs:
             --image-format=jpeg \
             --gl=swangle \
             --frames=$START_FRAME-$END_FRAME \
-            --concurrency=1 \
+            --concurrency=4 \
             --timeout=60000 \
             --browser-executable=$CHROME
 
