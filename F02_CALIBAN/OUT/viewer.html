@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>F02 CALIBAN — Hybrid Gate 2</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:wght@400;700&family=Oswald:wght@400;700&family=Bebas+Neue&family=Montserrat:wght@400;700&family=Inter:wght@400;700;900&family=Lato:wght@400;700&family=Roboto+Slab:wght@400;700&family=Cormorant+Garamond:wght@400;700&family=Permanent+Marker&family=Patrick+Hand&family=Courier+Prime&family=Space+Mono&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg: #0A0A0A; --surface: #0D0D0D; --surface2: #141414;
+  --border: #1A1A1A; --gold: #C5A44E; --gold-dim: rgba(197,164,78,0.25);
+  --gold-glow: rgba(197,164,78,0.08); --red: #8B0000;
+  --bone: #E8DCC8; --text: #E8DCC8; --text-dim: #666;
+  --mono: 'Courier Prime','Courier New',monospace; --cinzel: 'Cinzel',Georgia,serif;
+  --radius: 4px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 12px; min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ── HEADER ── */
+header { background: var(--surface); border-bottom: 2px solid var(--gold); padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-shrink: 0; }
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-title { font-family: var(--cinzel); font-size: 16px; font-weight: 700; color: var(--gold); letter-spacing: 3px; }
+.header-sub { font-size: 10px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; }
+.header-right { display: flex; gap: 8px; align-items: center; }
+.btn-import { padding: 6px 12px; background: transparent; color: var(--gold); font-family: var(--cinzel); font-size: 11px; border: 1px solid var(--gold-dim); border-radius: var(--radius); cursor: pointer; transition: all 0.2s; }
+.btn-import:hover { background: var(--gold-glow); }
+
+/* ── LAYOUT ── */
+.layout { display: flex; flex: 1; overflow: hidden; height: calc(100vh - 50px); }
+
+/* ── CONFIG PANEL (left) ── */
+.config-panel { width: 280px; min-width: 280px; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; padding: 12px; flex-shrink: 0; }
+.config-panel::-webkit-scrollbar { width: 4px; }
+.config-panel::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 2px; }
+.section-title { font-family: var(--cinzel); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--gold); margin-top: 14px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--gold-dim); }
+.section-title:first-child { margin-top: 0; }
+.ctrl-row { margin-bottom: 8px; }
+.ctrl-row label { font-size: 11px; color: #999; display: flex; justify-content: space-between; align-items: center; }
+.ctrl-row .val { font-family: monospace; color: var(--gold); font-size: 10px; }
+.ctrl-row input[type="range"] { width: 100%; margin-top: 2px; accent-color: var(--gold); }
+.ctrl-row select { width: 100%; margin-top: 2px; background: #1A1A1A; border: 1px solid var(--gold-dim); border-radius: var(--radius); padding: 3px 6px; font-size: 11px; color: var(--bone); font-family: var(--mono); }
+.ctrl-row input[type="color"] { width: 28px; height: 28px; border-radius: var(--radius); border: 1px solid var(--gold-dim); cursor: pointer; background: transparent; padding: 1px; }
+.ctrl-row input[type="checkbox"] { accent-color: var(--gold); width: 15px; height: 15px; cursor: pointer; }
+.ctrl-row input[type="text"] { width: 100%; margin-top: 2px; background: #1A1A1A; border: 1px solid var(--gold-dim); border-radius: var(--radius); padding: 3px 6px; font-size: 11px; color: var(--bone); font-family: var(--mono); }
+
+/* ── PREVIEW (center) ── */
+.preview-area { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.preview-area::-webkit-scrollbar { width: 4px; }
+.preview-area::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 2px; }
+.viewport-label { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: rgba(197,164,78,0.4); text-align: center; }
+.viewport-box { border: 1px solid var(--gold-dim); border-radius: 8px; overflow: hidden; background: #000; box-shadow: 0 4px 24px rgba(0,0,0,0.6), 0 0 1px rgba(197,164,78,0.3); position: relative; }
+.viewport-desktop { width: 100%; aspect-ratio: 16/9; max-width: 854px; margin: 0 auto; }
+.viewport-box canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+/* Timeline */
+.timeline-bar { display: flex; align-items: center; gap: 10px; flex-shrink: 0; padding: 8px 0; }
+.timeline-bar input[type="range"] { flex: 1; accent-color: var(--gold); }
+.timeline-bar .frame-label { font-size: 10px; font-family: var(--mono); color: var(--text-dim); min-width: 100px; text-align: right; }
+.btn-play { padding: 4px 12px; font-family: var(--cinzel); font-size: 11px; border: 1px solid var(--gold-dim); background: transparent; color: var(--gold); border-radius: var(--radius); cursor: pointer; transition: all 0.15s; }
+.btn-play:hover { background: var(--gold-glow); }
+
+/* ── SCENE PANEL (right) ── */
+.scene-panel { width: 280px; min-width: 280px; background: var(--surface); border-left: 1px solid var(--border); overflow-y: auto; padding: 12px; flex-shrink: 0; }
+.scene-panel::-webkit-scrollbar { width: 4px; }
+.scene-panel::-webkit-scrollbar-thumb { background: var(--gold-dim); border-radius: 2px; }
+.scene-item { display: flex; align-items: center; gap: 6px; padding: 5px 8px; cursor: pointer; border-radius: var(--radius); font-size: 11px; transition: background 0.1s; border: 1px solid transparent; margin-bottom: 3px; }
+.scene-item:hover { background: var(--surface2); }
+.scene-item.active { background: var(--gold-glow); border-color: var(--gold-dim); }
+.scene-item .snum { color: var(--gold); font-weight: bold; min-width: 20px; }
+.scene-item .sname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--bone); }
+.scene-item .sdur { color: var(--text-dim); font-size: 10px; }
+.chunk-item { padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 3px; font-size: 10px; }
+.chunk-item .engine { font-weight: bold; }
+.chunk-item .engine.gamma { color: #4a9a6a; }
+.chunk-item .engine.cypher { color: #4a8aca; }
+.chunk-item .st { color: var(--gold); font-size: 9px; font-family: monospace; }
+.chunk-item .sc { color: #aaa; font-size: 9px; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── FOOTER ── */
+footer { background: var(--surface); border-top: 1px solid var(--gold-dim); padding: 8px 20px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+.progress-info { flex: 1; font-size: 11px; color: var(--text-dim); }
+.btn-validate { padding: 8px 24px; background: var(--gold); color: var(--bg); font-family: var(--cinzel); font-size: 13px; font-weight: 700; border: none; border-radius: var(--radius); cursor: pointer; letter-spacing: 1px; transition: background 0.2s; }
+.btn-validate:hover { background: #D4B35D; }
+
+/* ── TOAST ── */
+.toast { position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%) translateY(80px); background: var(--gold); color: var(--bg); padding: 8px 20px; border-radius: var(--radius); font-weight: bold; font-size: 12px; font-family: var(--mono); transition: transform 0.3s ease; z-index: 100; pointer-events: none; }
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ── JSON OUTPUT ── */
+.json-output { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.92); z-index: 200; display: none; flex-direction: column; padding: 20px; }
+.json-output.show { display: flex; }
+.json-output .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.json-output h2 { font-family: var(--cinzel); color: var(--gold); font-size: 16px; letter-spacing: 2px; }
+.json-output .btn-close { padding: 6px 16px; background: var(--red); color: var(--bone); border: none; border-radius: var(--radius); cursor: pointer; font-family: var(--cinzel); font-size: 12px; }
+.json-output textarea { flex: 1; background: #0D0D0D; border: 1px solid var(--gold-dim); border-radius: var(--radius); color: var(--bone); font-family: var(--mono); font-size: 11px; padding: 12px; resize: none; line-height: 1.4; }
+.json-output .actions { display: flex; gap: 8px; margin-top: 12px; justify-content: center; }
+.json-output .btn-copy { padding: 8px 24px; background: var(--gold); color: var(--bg); border: none; border-radius: var(--radius); cursor: pointer; font-family: var(--cinzel); font-size: 12px; font-weight: 700; }
+.json-output .btn-download { padding: 8px 24px; background: transparent; color: var(--gold); border: 1px solid var(--gold-dim); border-radius: var(--radius); cursor: pointer; font-family: var(--cinzel); font-size: 12px; }
+
+.cross-sep { opacity: 0.25; }
+</style>
+</head>
+<body>
+
+<!-- ════ HEADER ════ -->
+<header>
+  <div class="header-left">
+    <svg viewBox="0 0 100 100" width="30" height="30">
+      <path d="M50,2 L58,38 L96,22 L66,46 L98,50 L66,54 L96,78 L58,62 L50,98 L42,62 L4,78 L34,54 L2,50 L34,46 L4,22 L42,38 Z" fill="#C5A44E"/>
+    </svg>
+    <div>
+      <div class="header-title">CYPHER</div>
+      <div class="header-sub">F02 CALIBAN — Hybrid Gate 2</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <svg viewBox="0 0 100 100" width="12" height="12" class="cross-sep">
+      <path d="M50,2 L58,38 L96,22 L66,46 L98,50 L66,54 L96,78 L58,62 L50,98 L42,62 L4,78 L34,54 L2,50 L34,46 L4,22 L42,38 Z" fill="#C5A44E"/>
+    </svg>
+    <button class="btn-import" onclick="document.getElementById('fileInput').click()">📂 Importer timing.json</button>
+  </div>
+</header>
+
+<!-- ════ LAYOUT ════ -->
+<div class="layout">
+  <!-- LEFT: Config Panel -->
+  <aside class="config-panel" id="controls"></aside>
+
+  <!-- CENTER: Preview -->
+  <main class="preview-area">
+    <div class="timeline-bar">
+      <button class="btn-play" id="btnPlay" onclick="togglePlay()">▶ Play</button>
+      <input id="timeline" type="range" min="0" max="100" value="0"/>
+      <span id="frameLabel" class="frame-label">0.0s / 0.0s</span>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+      <span class="viewport-label" id="vpLabel">16:9 — 854×480</span>
+      <div class="viewport-box viewport-desktop" id="vp-desktop">
+        <canvas id="canvas-desktop" width="854" height="480"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <!-- RIGHT: Scene Panel -->
+  <aside class="scene-panel">
+    <div class="section-title" style="margin-top:0;">📋 Segments</div>
+    <div id="sceneList"></div>
+    <div class="section-title">🔀 Hybrid Chunks</div>
+    <div id="chunkList"></div>
+  </aside>
+</div>
+
+<!-- ════ FOOTER ════ -->
+<footer>
+  <div class="progress-info" id="progressInfo">Aucun timing.json importé</div>
+  <svg viewBox="0 0 100 100" width="12" height="12" class="cross-sep">
+    <path d="M50,2 L58,38 L96,22 L66,46 L98,50 L66,54 L96,78 L58,62 L50,98 L42,62 L4,78 L34,54 L2,50 L34,46 L4,22 L42,38 Z" fill="#C5A44E"/>
+  </svg>
+  <button class="btn-validate" onclick="validate()">Valider Gate 2</button>
+</footer>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- FILE INPUT -->
+<input type="file" id="fileInput" accept=".json" style="display:none" onchange="handleImport(event)"/>
+
+<!-- JSON OUTPUT OVERLAY -->
+<div class="json-output" id="jsonOverlay">
+  <div class="header">
+    <h2>⚔ hybrid_spec.json généré</h2>
+    <button class="btn-close" onclick="document.getElementById('jsonOverlay').classList.remove('show')">Fermer</button>
+  </div>
+  <textarea id="jsonOutput" readonly></textarea>
+  <div class="actions">
+    <button class="btn-copy" onclick="copyJSON()">📋 Copier le JSON</button>
+    <button class="btn-download" onclick="downloadJSON()">⬇ Télécharger</button>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════
+// CYPHER F02 CALIBAN — HYBRID VIEWER v1.0
+// Autonomous viewer: import timing.json → configure → export hybrid_spec.json
+// ════════════════════════════════════════════════════
+
+const FONTS = ["Cinzel","Playfair Display","Cormorant Garamond","Montserrat","Oswald","Bebas Neue","Inter","Lato","Roboto Slab","Arial Black","Impact","Georgia","Courier Prime","Space Mono","Permanent Marker","Patrick Hand"];
+const FONT_LABELS = ["Cinzel — Serif élégant","Playfair Display — Serif","Cormorant Garamond — Serif fin","Montserrat — Sans moderne","Oswald — Sans condensé","Bebas Neue — Display","Inter — Sans tech","Lato — Sans lisible","Roboto Slab — Serif moderne","Arial Black — Display bold","Impact — Impact","Georgia — Serif classique","Courier Prime — Mono","Space Mono — Mono tech","Permanent Marker — Marker","Patrick Hand — Whiteboard"];
+
+const BG_OPTIONS = [
+  {label:"Couleur unie", value:"solid"},
+  {label:"Papier neuf", value:"paper_new"},
+  {label:"Papier froissé", value:"paper_crumpled"},
+  {label:"Papyrus ancien", value:"papyrus_old"},
+  {label:"Quadrillé bleu", value:"grid_dark"},
+];
+
+const BG_IMAGE_URLS = {
+  paper_new: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_paper_new.png",
+  paper_crumpled: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_paper_crumpled.png",
+  papyrus_old: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_papyrus_old.png",
+  grid_dark: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_grid_dark.png",
+};
+
+const US_STATES_MAP = {
+  "maryland": ["MD", 39.05, -76.64, 7],
+  "georgia": ["GA", 32.68, -83.64, 6.5],
+  "virginia": ["VA", 37.77, -78.17, 6.5],
+  "florida": ["FL", 28.68, -81.76, 6],
+  "california": ["CA", 36.78, -119.42, 6],
+  "texas": ["TX", 31.97, -99.90, 6],
+  "new york": ["NY", 43.0, -75.5, 6],
+  "pennsylvania": ["PA", 41.2, -77.4, 6],
+  "ohio": ["OH", 40.4, -82.9, 6],
+  "michigan": ["MI", 44.3, -85.4, 6],
+  "illinois": ["IL", 40.0, -89.0, 6],
+  "north carolina": ["NC", 35.6, -79.0, 6],
+  "arizona": ["AZ", 34.3, -111.6, 6],
+  "washington": ["WA", 47.4, -121.0, 6],
+};
+
+const USA_CENTER = ["US", 39.8, -98.5, 3];
+
+const COUNTRY_MAP = {
+  "united states": ["US", 38.9, -95.7, 4], "germany": ["DE", 51.2, 10.4, 5],
+  "japan": ["JP", 36.2, 138.2, 5], "south korea": ["KR", 35.9, 127.8, 6],
+  "france": ["FR", 46.2, 2.2, 5], "italy": ["IT", 42.8, 12.6, 5],
+  "sweden": ["SE", 60.1, 18.6, 5], "china": ["CN", 35.9, 104.2, 4],
+  "canada": ["CA", 56.1, -106.3, 4], "united kingdom": ["GB", 54.4, -3.4, 5],
+  "uk": ["GB", 54.4, -3.4, 5], "united arab emirates": ["AE", 23.4, 53.8, 6],
+  "uae": ["AE", 23.4, 53.8, 6], "taiwan": ["TW", 23.7, 120.9, 7],
+  "switzerland": ["CH", 46.8, 8.2, 6], "netherlands": ["NL", 52.1, 5.3, 6],
+  "spain": ["ES", 40.5, -3.7, 5], "india": ["IN", 20.6, 78.9, 4],
+  "australia": ["AU", -25.3, 133.8, 4], "singapore": ["SG", 1.35, 103.82, 9],
+  "finland": ["FI", 61.9, 25.7, 5], "denmark": ["DK", 56.3, 9.5, 6],
+  "brazil": ["BR", -14.2, -51.9, 4],
+};
+
+const defaults = {
+  format: "long", width: 854, height: 480,
+  // Capsules
+  world_scale: 0.85, world_next_scale: 0.35,
+  world_opacity: 1.0, world_next_opacity: 0.3,
+  // Camera sinusoidal
+  camera_amplitude: 200, camera_spacing: 1500,
+  // Background
+  background_type: "solid", background_color: "#0D0D1A", background_scale: 1.0,
+  // Titles
+  world_title_visible: true, world_title_font: "Arial Black",
+  world_title_size: 32, world_title_color: "#FFFFFF",
+  world_title_speed: 12, world_title_gap: 20,
+  // Subtitles
+  font_primary: "Arial Black", font_accent: "Playfair Display",
+  subtitle_size: 36, subtitle_color: "#000000",
+  subtitle_position: "bottom", subtitle_align: "center",
+  subtitle_anim_enabled: true, subtitle_anim_speed: 5, subtitle_word_fade: 3,
+  // Accent / strong words
+  accent_color: "#FFD700", accent_size: 42, accent_font: "Playfair Display",
+  // Effects
+  grain_intensity: 0.08, vignette: true,
+  // Highlight (CYPHER)
+  highlight_color: "#B30006", highlight_opacity: 0.55,
+  // Production
+  production_title: "CYPHER",
+};
+
+let timing = null;
+let segs = [];
+let states = [];
+let chunks = [];
+let styleOverrides = {};
+let currentSceneIndex = 0;
+let playing = false;
+let animTime = 0;
+let playStartTime = 0;
+let sceneStartTime = 0;
+
+function getS(key) { return styleOverrides[key] ?? defaults[key]; }
+function setS(key, val) { styleOverrides[key] = val; }
+
+// ════════════════════════════════════════════════════
+// TIMING.JSON PARSER + HYBRID CHUNK BUILDER
+// ════════════════════════════════════════════════════
+
+function parseSegment(seg, words) {
+  var text = seg.text.toLowerCase();
+  var country = null, iso = null, lat = 0, lon = 0, zoom = 4;
+  // Check US states first
+  for (var name in US_STATES_MAP) {
+    if (text.indexOf(name) >= 0) {
+      var d = US_STATES_MAP[name];
+      country = name; iso = d[0]; lat = d[1]; lon = d[2]; zoom = d[3]; break;
+    }
+  }
+  if (!country) {
+    for (var name in COUNTRY_MAP) {
+      if (text.indexOf(name) >= 0) {
+        var d = COUNTRY_MAP[name];
+        country = name; iso = d[0]; lat = d[1]; lon = d[2]; zoom = d[3]; break;
+      }
+    }
+  }
+  return {
+    id: seg.id, text: seg.text, start: seg.start, end: seg.end,
+    start_frame: seg.start_frame || 0, end_frame: seg.end_frame || 0,
+    country: country || "unknown", iso: iso || "", lat: lat, lon: lon, zoom: zoom
+  };
+}
+
+function detectStates(segs) {
+  var found = [];
+  for (var i = 0; i < segs.length; i++) {
+    var text = segs[i].text.toLowerCase();
+    for (var name in US_STATES_MAP) {
+      if (text.indexOf(name) >= 0) {
+        var exists = false;
+        for (var j = 0; j < found.length; j++) { if (found[j].name === name) { exists = true; break; } }
+        if (!exists) {
+          var d = US_STATES_MAP[name];
+          found.push({name: name, iso: d[0], lat: d[1], lon: d[2], zoom: d[3]});
+        }
+      }
+    }
+  }
+  return found;
+}
+
+function buildHybridChunks(segs, states, fps) {
+  fps = fps || 30;
+  var result = [];
+  var cid = 0;
+  if (!states.length) {
+    result.push({id: 0, engine: "gamma", start: segs[0].start, end: segs[segs.length-1].end,
+      image_file: "intro.png", media_type: "image", overlay_type: "defaut",
+      text_subtitles: segs.map(function(s){return s.text;}).join(" "), state_name: "Introduction"});
+    return result;
+  }
+  // Find first state segment
+  var firstStateIdx = null;
+  for (var i = 0; i < segs.length; i++) {
+    var text = segs[i].text.toLowerCase();
+    for (var j = 0; j < states.length; j++) {
+      if (text.indexOf(states[j].name) >= 0) { firstStateIdx = i; break; }
+    }
+    if (firstStateIdx !== null) break;
+  }
+  // Intro gamma
+  if (firstStateIdx && firstStateIdx > 0) {
+    var introEnd = segs[firstStateIdx].start;
+    var introText = "";
+    for (var i = 0; i < firstStateIdx; i++) introText += segs[i].text + " ";
+    result.push({id: cid, engine: "gamma", start: segs[0].start, end: introEnd,
+      image_file: "intro_student_debt.png", media_type: "image", overlay_type: "defaut",
+      text_subtitles: introText.trim(), state_name: "Introduction"});
+    cid++;
+  }
+  // Per state: cypher travel + gamma story
+  var prevState = null;
+  for (var si = 0; si < states.length; si++) {
+    var state = states[si];
+    var stateSegs = [];
+    for (var i = 0; i < segs.length; i++) {
+      if (segs[i].text.toLowerCase().indexOf(state.name) >= 0) stateSegs.push(segs[i]);
+    }
+    if (!stateSegs.length) continue;
+    var stateStart = stateSegs[0].start;
+    var stateEnd = stateSegs[stateSegs.length-1].end;
+    // Travel
+    var travelStart = result.length ? result[result.length-1].end : 0.0;
+    var travelEnd = stateStart;
+    if (travelEnd > travelStart) {
+      var fromCoords = prevState
+        ? {lon: prevState.lon, lat: prevState.lat, zoom: prevState.zoom}
+        : {lon: USA_CENTER[2], lat: USA_CENTER[1], zoom: USA_CENTER[3]};
+      result.push({id: cid, engine: "cypher", start: travelStart, end: travelEnd,
+        action: "travel", from: fromCoords, to: {lon: state.lon, lat: state.lat, zoom: state.zoom},
+        state_name: capitalize(state.name), state_iso: state.iso});
+      cid++;
+    }
+    // Story
+    var storyText = "";
+    for (var i = 0; i < stateSegs.length; i++) storyText += stateSegs[i].text + " ";
+    result.push({id: cid, engine: "gamma", start: stateStart, end: stateEnd,
+      image_file: state.name.replace(/ /g, "_") + "_debt.png",
+      media_type: "image", overlay_type: "defaut",
+      text_subtitles: storyText.trim(), state_name: capitalize(state.name)});
+    cid++;
+    prevState = state;
+  }
+  // Travel out
+  if (prevState && result.length) {
+    var outStart = result[result.length-1].end;
+    var outEnd = segs[segs.length-1].end;
+    if (outEnd > outStart) {
+      result.push({id: cid, engine: "cypher", start: outStart, end: outEnd,
+        action: "travel_out",
+        from: {lon: prevState.lon, lat: prevState.lat, zoom: prevState.zoom},
+        to: {lon: USA_CENTER[2], lat: USA_CENTER[1], zoom: USA_CENTER[3]},
+        state_name: "USA", state_iso: "US"});
+    }
+  }
+  return result;
+}
+
+function capitalize(s) { return s.replace(/\b\w/g, function(c){return c.toUpperCase();}); }
+
+// ════════════════════════════════════════════════════
+// IMPORT TIMING.JSON
+// ════════════════════════════════════════════════════
+
+function handleImport(event) {
+  var file = event.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      timing = JSON.parse(e.target.result);
+      var words = timing.words || [];
+      segs = (timing.segments || []).map(function(s) { return parseSegment(s, words); });
+      states = detectStates(segs);
+      chunks = buildHybridChunks(segs, states, timing.meta?.fps || 30);
+      currentSceneIndex = 0;
+      buildSceneList();
+      buildChunkList();
+      updateFooterInfo();
+      updateTimelineSlider();
+      renderCanvas();
+      showToast("timing.json importé ✅ — " + segs.length + " segments, " + chunks.length + " chunks");
+    } catch (err) {
+      showToast("Erreur JSON: " + err.message);
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = "";
+}
+
+// ════════════════════════════════════════════════════
+// CANVAS PREVIEW (simplified — no Leaflet)
+// ════════════════════════════════════════════════════
+
+const bgImages = {};
+(function preloadBgImages() {
+  for (var key in BG_IMAGE_URLS) {
+    var img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = (function(k) { return function() { bgImages[k] = img; }; })(key);
+    img.src = BG_IMAGE_URLS[key];
+  }
+})();
+
+function drawBgTexture(ctx, W, H, type) {
+  var bgColor = getS("background_color");
+  var bgScale = parseFloat(getS("background_scale")) || 1.0;
+  if (type === "solid" || !type) {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, W, H);
+    return;
+  }
+  var img = bgImages[type];
+  if (img && img.complete && img.naturalWidth > 0) {
+    ctx.save();
+    var coverScale = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+    var finalScale = coverScale * bgScale;
+    var dw = img.naturalWidth * finalScale;
+    var dh = img.naturalHeight * finalScale;
+    ctx.drawImage(img, (W - dw) / 2, (H - dh) / 2, dw, dh);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function renderCanvas() {
+  var canvas = document.getElementById("canvas-desktop");
+  if (!canvas) return;
+  var ctx = canvas.getContext("2d");
+  var W = canvas.width, H = canvas.height;
+
+  if (!segs.length) {
+    ctx.fillStyle = "#0A0A0A";
+    ctx.fillRect(0, 0, W, H);
+    ctx.font = "14px 'Courier Prime', monospace";
+    ctx.fillStyle = "rgba(197,164,78,0.3)";
+    ctx.textAlign = "center";
+    ctx.fillText("Importer timing.json pour commencer", W/2, H/2);
+    return;
+  }
+
+  ctx.clearRect(0, 0, W, H);
+
+  // 1. Background texture
+  drawBgTexture(ctx, W, H, getS("background_type"));
+
+  // 2. Capsule
+  var worldScale = parseFloat(getS("world_scale")) || 0.85;
+  var worldOpacity = parseFloat(getS("world_opacity"));
+  var capsuleW = W * worldScale, capsuleH = H * worldScale;
+  var capsuleX = (W - capsuleW) / 2, capsuleY = (H - capsuleH) / 2;
+
+  ctx.save();
+  ctx.globalAlpha = worldOpacity;
+  var cr = 12 * (W / 854);
+  ctx.beginPath();
+  ctx.moveTo(capsuleX + cr, capsuleY);
+  ctx.lineTo(capsuleX + capsuleW - cr, capsuleY);
+  ctx.quadraticCurveTo(capsuleX + capsuleW, capsuleY, capsuleX + capsuleW, capsuleY + cr);
+  ctx.lineTo(capsuleX + capsuleW, capsuleY + capsuleH - cr);
+  ctx.quadraticCurveTo(capsuleX + capsuleW, capsuleY + capsuleH, capsuleX + capsuleW - cr, capsuleY + capsuleH);
+  ctx.lineTo(capsuleX + cr, capsuleY + capsuleH);
+  ctx.quadraticCurveTo(capsuleX, capsuleY + capsuleH, capsuleX, capsuleY + capsuleH - cr);
+  ctx.lineTo(capsuleX, capsuleY + cr);
+  ctx.quadraticCurveTo(capsuleX, capsuleY, capsuleX + cr, capsuleY);
+  ctx.closePath();
+  ctx.clip();
+
+  // Placeholder content inside capsule
+  var seg = segs[currentSceneIndex];
+  if (seg) {
+    ctx.fillStyle = "#111";
+    ctx.fillRect(capsuleX, capsuleY, capsuleW, capsuleH);
+    // State/country name
+    ctx.font = "bold " + (24 * W / 854) + "px 'Cinzel', Georgia, serif";
+    ctx.fillStyle = getS("highlight_color");
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    var label = seg.iso ? seg.iso + " — " + seg.country.toUpperCase() : "Segment " + (currentSceneIndex + 1);
+    ctx.fillText(label, W/2, capsuleY + capsuleH/2 - 15);
+    // Segment text preview
+    ctx.font = (11 * W / 854) + "px 'Courier Prime', monospace";
+    ctx.fillStyle = "#888";
+    var previewText = seg.text.substring(0, 60);
+    ctx.fillText(previewText + (seg.text.length > 60 ? "..." : ""), W/2, capsuleY + capsuleH/2 + 15);
+  }
+
+  // Vignette inside capsule
+  if (getS("vignette")) {
+    var vg = ctx.createRadialGradient(W/2, H/2, W*0.3, W/2, H/2, W*0.75);
+    vg.addColorStop(0, "rgba(0,0,0,0)");
+    vg.addColorStop(1, "rgba(0,0,0,0.5)");
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  ctx.restore();
+
+  // Capsule border
+  ctx.strokeStyle = "rgba(197,164,78,0.3)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(capsuleX + cr, capsuleY);
+  ctx.lineTo(capsuleX + capsuleW - cr, capsuleY);
+  ctx.quadraticCurveTo(capsuleX + capsuleW, capsuleY, capsuleX + capsuleW, capsuleY + cr);
+  ctx.lineTo(capsuleX + capsuleW, capsuleY + capsuleH - cr);
+  ctx.quadraticCurveTo(capsuleX + capsuleW, capsuleY + capsuleH, capsuleX + capsuleW - cr, capsuleY + capsuleH);
+  ctx.lineTo(capsuleX + cr, capsuleY + capsuleH);
+  ctx.quadraticCurveTo(capsuleX, capsuleY + capsuleH, capsuleX, capsuleY + capsuleH - cr);
+  ctx.lineTo(capsuleX, capsuleY + cr);
+  ctx.quadraticCurveTo(capsuleX, capsuleY, capsuleX + cr, capsuleY);
+  ctx.closePath();
+  ctx.stroke();
+
+  // Title bar
+  var sf = W / 854;
+  ctx.fillStyle = "rgba(0,0,0,0.7)";
+  ctx.fillRect(0, 0, W, 36 * sf);
+  ctx.fillStyle = getS("accent_color");
+  ctx.fillRect(0, 36 * sf, W, 2 * sf);
+  ctx.font = "bold " + (16 * sf) + "px 'Cinzel', Georgia, serif";
+  ctx.fillStyle = getS("accent_color");
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText("⚔ " + getS("production_title"), 12 * sf, 20 * sf);
+  ctx.font = (10 * sf) + "px 'Courier Prime', monospace";
+  ctx.fillStyle = "#666";
+  ctx.textAlign = "right";
+  ctx.fillText("CALIBAN · " + W + "×" + H, W - 12 * sf, 20 * sf);
+
+  // Scene title
+  if (getS("world_title_visible") && seg) {
+    var tSize = parseFloat(getS("world_title_size"));
+    var tGap = parseFloat(getS("world_title_gap") || 20);
+    var tColor = getS("world_title_color");
+    var titleFont = getS("world_title_font") || "Cinzel";
+    var isAbove = currentSceneIndex % 2 === 0;
+    ctx.save();
+    ctx.font = "bold " + Math.max(tSize * sf, 10) + "px '" + titleFont + "', Georgia, serif";
+    ctx.fillStyle = tColor;
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 8 * sf;
+    ctx.shadowOffsetY = 2 * sf;
+    var titleText = seg.country !== "unknown" ? capitalize(seg.country) : "Segment " + (currentSceneIndex + 1);
+    if (isAbove) {
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(titleText, capsuleX + capsuleW/2, capsuleY - tGap * sf);
+    } else {
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(titleText, capsuleX + capsuleW + tGap * sf, capsuleY + capsuleH/2);
+    }
+    ctx.restore();
+  }
+
+  // Subtitle
+  if (seg && seg.text) {
+    var subSize = parseFloat(getS("subtitle_size"));
+    var subColor = getS("subtitle_color");
+    var subPos = getS("subtitle_position");
+    var fontPrimary = getS("font_primary") || "Arial Black";
+    ctx.font = subSize * sf + "px '" + fontPrimary + "', Georgia, serif";
+    ctx.fillStyle = subColor;
+    ctx.shadowColor = "rgba(0,0,0,0.85)";
+    ctx.shadowBlur = 4 * sf;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    var subY = subPos === "top" ? H * 0.15 : subPos === "center" ? H * 0.5 : H - 40 * sf;
+    var previewSub = seg.text.substring(0, 50);
+    ctx.fillText(previewSub + (seg.text.length > 50 ? "..." : ""), W/2, subY);
+    ctx.shadowBlur = 0;
+  }
+
+  // Progress bar
+  if (segs.length) {
+    var totalDur = segs[segs.length-1].end - segs[0].start;
+    var elapsed = 0;
+    for (var i = 0; i < currentSceneIndex; i++) elapsed += segs[i].end - segs[i].start;
+    if (playing) elapsed += (performance.now()/1000) - sceneStartTime;
+    else elapsed += (segs[currentSceneIndex].end - segs[currentSceneIndex].start) * 0.5;
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    ctx.fillRect(0, H - 5 * sf, W, 5 * sf);
+    ctx.fillStyle = getS("accent_color");
+    ctx.fillRect(0, H - 5 * sf, W * Math.min(1, elapsed / totalDur), 5 * sf);
+  }
+}
+
+// ════════════════════════════════════════════════════
+// ANIMATION LOOP
+// ════════════════════════════════════════════════════
+
+function renderLoop() {
+  try {
+    if (playing && segs.length) {
+      var now = performance.now() / 1000;
+      var sceneElapsed = now - sceneStartTime;
+      var seg = segs[currentSceneIndex];
+      if (sceneElapsed >= (seg.end - seg.start)) {
+        if (currentSceneIndex < segs.length - 1) {
+          currentSceneIndex++;
+          sceneStartTime = now;
+          buildSceneList();
+        } else { stopPlay(); }
+      }
+      updateTimelineSlider();
+    }
+    animTime += 1/60;
+    renderCanvas();
+  } catch(e) { console.error("renderLoop:", e); }
+  requestAnimationFrame(renderLoop);
+}
+
+function togglePlay() { if (playing) stopPlay(); else startPlay(); }
+function startPlay() {
+  if (!segs.length) return;
+  playing = true;
+  sceneStartTime = performance.now() / 1000;
+  document.getElementById("btnPlay").textContent = "⏸ Pause";
+}
+function stopPlay() {
+  playing = false;
+  document.getElementById("btnPlay").textContent = "▶ Play";
+}
+
+function goToScene(i) {
+  currentSceneIndex = Math.max(0, Math.min(i, segs.length - 1));
+  if (playing) sceneStartTime = performance.now() / 1000;
+  buildSceneList();
+  updateTimelineSlider();
+}
+
+function updateTimelineSlider() {
+  if (!segs.length) return;
+  var totalDur = segs[segs.length-1].end - segs[0].start;
+  var elapsed = 0;
+  for (var i = 0; i < currentSceneIndex; i++) elapsed += segs[i].end - segs[i].start;
+  if (playing) elapsed += (performance.now()/1000) - sceneStartTime;
+  else elapsed += (segs[currentSceneIndex].end - segs[currentSceneIndex].start) * 0.5;
+  document.getElementById("timeline").value = (elapsed / totalDur) * 100;
+  document.getElementById("frameLabel").textContent = elapsed.toFixed(1) + "s / " + totalDur.toFixed(1) + "s";
+}
+
+document.getElementById("timeline").addEventListener("input", function() {
+  if (playing) stopPlay();
+  if (!segs.length) return;
+  var pct = parseFloat(this.value) / 100;
+  var totalDur = segs[segs.length-1].end - segs[0].start;
+  var target = pct * totalDur + segs[0].start, elapsed = segs[0].start;
+  for (var i = 0; i < segs.length; i++) {
+    if (elapsed + (segs[i].end - segs[i].start) >= target) {
+      currentSceneIndex = i;
+      buildSceneList();
+      break;
+    }
+    elapsed += segs[i].end - segs[i].start;
+  }
+});
+
+function updateCanvasFormat() {
+  var fmt = getS("format");
+  var dc = document.getElementById("canvas-desktop");
+  var db = document.querySelector(".viewport-desktop");
+  var label = document.getElementById("vpLabel");
+  if (fmt === "short") {
+    dc.width = 480; dc.height = 854;
+    db.style.aspectRatio = "9/16"; db.style.maxWidth = "300px";
+    label.textContent = "9:16 — 480×854";
+  } else {
+    dc.width = 854; dc.height = 480;
+    db.style.aspectRatio = "16/9"; db.style.maxWidth = "854px";
+    label.textContent = "16:9 — 854×480";
+  }
+}
+
+// ════════════════════════════════════════════════════
+// SCENE LIST + CHUNK LIST
+// ════════════════════════════════════════════════════
+
+function buildSceneList() {
+  var container = document.getElementById("sceneList");
+  if (!segs.length) { container.innerHTML = '<div style="color:#666;font-size:10px">Importer timing.json</div>'; return; }
+  container.innerHTML = segs.map(function(s, i) {
+    return '<div class="scene-item ' + (i === currentSceneIndex ? "active" : "") + '" onclick="goToScene(' + i + ')">' +
+      '<span class="snum">' + (i+1) + '</span>' +
+      '<span class="sname">' + (s.iso || "?") + " " + (s.country || "").substring(0, 12) + '</span>' +
+      '<span class="sdur">' + (s.end - s.start).toFixed(1) + 's</span></div>';
+  }).join("");
+}
+
+function buildChunkList() {
+  var container = document.getElementById("chunkList");
+  if (!chunks.length) { container.innerHTML = '<div style="color:#666;font-size:10px">Importer timing.json</div>'; return; }
+  container.innerHTML = chunks.map(function(c) {
+    var detail = c.engine === "cypher" ? (c.action + " → " + c.state_name) : c.state_name;
+    return '<div class="chunk-item"><span class="engine ' + c.engine + '">' + c.engine.toUpperCase() + '</span> #' + c.id +
+      ' <span class="st">' + c.start.toFixed(1) + 's→' + c.end.toFixed(1) + 's</span>' +
+      '<div class="sc">' + detail + '</div></div>';
+  }).join("");
+}
+
+function updateFooterInfo() {
+  if (!segs.length) { document.getElementById("progressInfo").textContent = "Aucun timing.json importé"; return; }
+  var totalDur = segs[segs.length-1].end - segs[0].start;
+  var fps = (timing && timing.meta && timing.meta.fps) || 30;
+  document.getElementById("progressInfo").textContent =
+    segs.length + " segments · " + chunks.length + " chunks · " + totalDur.toFixed(1) + "s · " + Math.ceil(totalDur * fps) + " frames @ " + fps + "fps";
+}
+
+// ════════════════════════════════════════════════════
+// CONTROL BUILDERS
+// ════════════════════════════════════════════════════
+
+function section(t) { return '<div class="section-title">' + t + '</div>'; }
+function slider(key, label, min, max, step) {
+  var v = getS(key);
+  return '<div class="ctrl-row"><label><span>' + label + '</span><span class="val">' + v + '</span></label><input type="range" data-key="' + key + '" min="' + min + '" max="' + max + '" step="' + step + '" value="' + v + '"></div>';
+}
+function selectCtrl(key, label, values, labels) {
+  var v = getS(key);
+  var opts = values.map(function(val, i) { return '<option value="' + val + '" ' + (String(val) === String(v) ? "selected" : "") + '>' + labels[i] + '</option>'; }).join("");
+  return '<div class="ctrl-row"><label>' + label + '</label><select data-key="' + key + '">' + opts + '</select></div>';
+}
+function fontSelect(key, label) {
+  var v = getS(key);
+  var opts = FONTS.map(function(f, i) { return '<option value="' + f + '" ' + (f === v ? "selected" : "") + '>' + FONT_LABELS[i] + '</option>'; }).join("");
+  return '<div class="ctrl-row"><label>' + label + '</label><select data-key="' + key + '">' + opts + '</select></div>';
+}
+function colorCtrl(key, label) {
+  var v = getS(key);
+  return '<div class="ctrl-row" style="display:flex;align-items:center;gap:8px"><input type="color" data-key="' + key + '" value="' + v + '"><label style="flex:1">' + label + '</label><span class="val" style="font-size:10px">' + v + '</span></div>';
+}
+function checkbox(key, label) {
+  var v = getS(key);
+  return '<div class="ctrl-row"><label style="gap:8px;cursor:pointer;display:flex;align-items:center"><input type="checkbox" data-key="' + key + '" ' + (v ? "checked" : "") + '> ' + label + '</label></div>';
+}
+function radioGroup(key, options) {
+  var v = getS(key);
+  return '<div class="ctrl-row" style="display:flex;gap:6px">' + options.map(function(o) {
+    return '<label style="flex:1;display:flex;align-items:center;gap:4px;padding:6px 8px;background:' + (o.value === v ? "var(--gold-glow)" : "#1A1A1A") + ';border:1px solid ' + (o.value === v ? "var(--gold-dim)" : "var(--border)") + ';border-radius:var(--radius);cursor:pointer;font-size:10px;color:' + (o.value === v ? "var(--gold)" : "var(--bone)") + '"><input type="radio" name="' + key + '" value="' + o.value + '" ' + (o.value === v ? "checked" : "") + ' style="accent-color:var(--gold)"> ' + o.label + '</label>';
+  }).join("") + '</div>';
+}
+
+function buildControls() {
+  var c = document.getElementById("controls");
+  c.innerHTML =
+    section("📐 Format (480p)") +
+    radioGroup("format", [{value:"long",label:"16:9 (854×480)"},{value:"short",label:"9:16 (480×854)"}]) +
+
+    section("🖼️ Capsules") +
+    slider("world_scale","Taille visuel actif",0.2,1,0.05) +
+    slider("world_next_scale","Taille visuel N+1",0.1,1,0.05) +
+    slider("world_opacity","Opacité visuel actif",0,1,0.05) +
+    slider("world_next_opacity","Opacité visuel N+1",0,1,0.01) +
+
+    section("🎥 Caméra sinusoïdale") +
+    slider("camera_amplitude","Amplitude (px)",0,500,10) +
+    slider("camera_spacing","Espacement (px)",500,3000,50) +
+
+    section("🖼️ Background") +
+    selectCtrl("background_type","Type de fond",BG_OPTIONS.map(function(o){return o.value;}),BG_OPTIONS.map(function(o){return o.label;})) +
+    colorCtrl("background_color","Couleur fond") +
+    slider("background_scale","Scale fond",0.5,2,0.05) +
+
+    section("📝 Typographie") +
+    fontSelect("font_primary","Police principale") +
+    fontSelect("font_accent","Police accent") +
+    slider("subtitle_size","Taille sous-titres (px)",16,120,2) +
+    selectCtrl("subtitle_position","Position",["top","center","bottom"],["Haut","Centre","Bas"]) +
+
+    section("🎨 Couleurs") +
+    colorCtrl("subtitle_color","Couleur sous-titres") +
+    colorCtrl("accent_color","Couleur accent") +
+
+    section("💪 Mots forts (**mot**)") +
+    fontSelect("accent_font","Police mots forts") +
+    slider("accent_size","Taille mots forts (px)",16,120,2) +
+
+    section("🏷️ Titres (scène)") +
+    checkbox("world_title_visible","Afficher les titres") +
+    fontSelect("world_title_font","Police titre") +
+    slider("world_title_size","Taille titre",14,60,2) +
+    colorCtrl("world_title_color","Couleur titre") +
+    slider("world_title_speed","Vitesse anim (frames)",4,30,1) +
+    slider("world_title_gap","Espace titre↔visuel (px)",0,80,2) +
+
+    section("🎬 Animation sous-titres") +
+    checkbox("subtitle_anim_enabled","Animation activée") +
+    slider("subtitle_anim_speed","Vitesse (frames)",1,15,1) +
+    slider("subtitle_word_fade","Fondu mot (frames)",1,12,1) +
+
+    section("✨ Effets") +
+    slider("grain_intensity","Grain",0,1,0.01) +
+    checkbox("vignette","Vignetage activé") +
+
+    section("🗺️ Highlight état (CYPHER)") +
+    colorCtrl("highlight_color","Couleur highlight") +
+    slider("highlight_opacity","Opacité highlight",0,1,0.05) +
+
+    section("⚔ Production") +
+    '<div class="ctrl-row"><label>Titre production</label><input type="text" data-key="production_title" value="' + getS("production_title") + '"></div>';
+  bindControlEvents();
+}
+
+function bindControlEvents() {
+  var c = document.getElementById("controls");
+  c.querySelectorAll("input[type=range]").forEach(function(el) {
+    el.addEventListener("input", function() {
+      var v = parseFloat(el.value);
+      setS(el.dataset.key, v);
+      var valEl = el.closest(".ctrl-row").querySelector(".val");
+      if (valEl) valEl.textContent = v;
+    });
+  });
+  c.querySelectorAll("select").forEach(function(el) {
+    el.addEventListener("change", function() { setS(el.dataset.key, el.value); });
+  });
+  c.querySelectorAll("input[type=checkbox]").forEach(function(el) {
+    el.addEventListener("change", function() { setS(el.dataset.key, el.checked); });
+  });
+  c.querySelectorAll("input[type=color]").forEach(function(el) {
+    el.addEventListener("input", function() {
+      setS(el.dataset.key, el.value);
+      var valEl = el.closest(".ctrl-row").querySelector(".val");
+      if (valEl) valEl.textContent = el.value;
+    });
+  });
+  c.querySelectorAll("input[type=text]").forEach(function(el) {
+    if (el.dataset.key) el.addEventListener("input", function() { setS(el.dataset.key, el.value); });
+  });
+  c.querySelectorAll('input[name=format]').forEach(function(el) {
+    el.addEventListener("change", function() {
+      setS("format", el.value);
+      setS("width", el.value === "short" ? 480 : 854);
+      setS("height", el.value === "short" ? 854 : 480);
+      updateCanvasFormat();
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════
+// VALIDATE → GENERATE hybrid_spec.json
+// ════════════════════════════════════════════════════
+
+function validate() {
+  if (!chunks.length) { showToast("Importer timing.json d'abord"); return; }
+
+  var fmt = getS("format");
+  var w = fmt === "short" ? 480 : 854;
+  var h = fmt === "short" ? 854 : 480;
+  var fps = (timing && timing.meta && timing.meta.fps) || 30;
+  var totalFrames = Math.ceil((segs[segs.length-1].end - segs[0].start) * fps);
+
+  var gamma_config = {
+    font_primary: getS("font_primary"),
+    font_accent: getS("font_accent"),
+    subtitle_size: parseInt(getS("subtitle_size")),
+    subtitle_color: getS("subtitle_color"),
+    subtitle_position: getS("subtitle_position"),
+    subtitle_align: getS("subtitle_align"),
+    subtitle_anim_enabled: getS("subtitle_anim_enabled"),
+    subtitle_anim_speed: parseInt(getS("subtitle_anim_speed")),
+    subtitle_word_fade: parseInt(getS("subtitle_word_fade")),
+    accent_color: getS("accent_color"),
+    accent_size: parseInt(getS("accent_size")),
+    accent_font: getS("accent_font"),
+    background_type: getS("background_type"),
+    background_color: getS("background_color"),
+    background_scale: parseFloat(getS("background_scale")),
+    grain_intensity: parseFloat(getS("grain_intensity")),
+    vignette: getS("vignette"),
+    world_scale: parseFloat(getS("world_scale")),
+    world_next_scale: parseFloat(getS("world_next_scale")),
+    world_opacity: parseFloat(getS("world_opacity")),
+    world_next_opacity: parseFloat(getS("world_next_opacity")),
+    camera_amplitude: parseInt(getS("camera_amplitude")),
+    camera_spacing: parseInt(getS("camera_spacing")),
+    world_title_visible: getS("world_title_visible"),
+    world_title_font: getS("world_title_font"),
+    world_title_size: parseInt(getS("world_title_size")),
+    world_title_color: getS("world_title_color"),
+    world_title_speed: parseInt(getS("world_title_speed")),
+    world_title_gap: parseInt(getS("world_title_gap")),
+  };
+
+  var cypher_config = {
+    highlight_color: getS("highlight_color"),
+    highlight_opacity: parseFloat(getS("highlight_opacity")),
+  };
+
+  var hybrid_spec = {
+    meta: {
+      fps: fps,
+      format: fmt === "short" ? "vertical" : "horizontal",
+      width: w, height: h,
+      audio: "audio_clean.mp3",
+      title: getS("production_title"),
+      version: "2.0",
+      engines: ["cypher", "gamma"],
+      duration_seconds: segs[segs.length-1].end - segs[0].start,
+      total_frames: totalFrames,
+    },
+    gamma_config: gamma_config,
+    cypher_config: cypher_config,
+    chunks: chunks,
+  };
+
+  var json = JSON.stringify(hybrid_spec, null, 2);
+  document.getElementById("jsonOutput").value = json;
+  document.getElementById("jsonOverlay").classList.add("show");
+  showToast("hybrid_spec.json généré ✅");
+}
+
+function copyJSON() {
+  var ta = document.getElementById("jsonOutput");
+  ta.select();
+  document.execCommand("copy");
+  showToast("JSON copié dans le presse-papier ✅");
+}
+
+function downloadJSON() {
+  var json = document.getElementById("jsonOutput").value;
+  var blob = new Blob([json], {type: "application/json"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = "hybrid_spec.json"; a.click();
+  URL.revokeObjectURL(url);
+  showToast("hybrid_spec.json téléchargé ✅");
+}
+
+function showToast(msg) {
+  var t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(function() { t.classList.remove("show"); }, 2500);
+}
+
+// ════════════════════════════════════════════════════
+// INIT
+// ════════════════════════════════════════════════════
+buildControls();
+buildSceneList();
+buildChunkList();
+updateCanvasFormat();
+renderLoop();
+</script>
+</body>
+</html>
