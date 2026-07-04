@@ -2,11 +2,11 @@
   "meta": {
     "fps": 30,
     "format": "horizontal",
-    "width": 1920,
-    "height": 1080,
+    "width": 854,
+    "height": 480,
     "audio": "audio_clean.mp3",
     "title": "Top 4 US States with Heaviest Student Debt",
-    "version": "1.2",
+    "version": "1.3",
     "engines": [
       "cypher",
       "gamma"
