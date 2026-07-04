@@ -193,7 +193,12 @@ jobs:
           FRAMES_DIR=/tmp/frames_${CHUNK_ID}
           mkdir -p $FRAMES_DIR
 
-          npx remotion render \
+          # ── Anti-hang: timeout wrapper + retry with concurrency=1 ──
+          RENDER_SUCCESS=0
+
+          # Attempt 1: concurrency=2 with 10 min hard timeout
+          echo "[CHUNK $CHUNK_ID] Attempt 1/2 — concurrency=2, timeout 600s"
+          timeout 600 npx remotion render \
             src/index.jsx \
             CypherGamma \
             $FRAMES_DIR \
@@ -203,7 +208,31 @@ jobs:
             --frames=$START_FRAME-$END_FRAME \
             --concurrency=2 \
             --timeout=60000 \
-            --browser-executable=$CHROME
+            --browser-executable=$CHROME && RENDER_SUCCESS=1
+
+          # Attempt 2: if attempt 1 hung/failed, retry with concurrency=1 and 15 min timeout
+          if [ $RENDER_SUCCESS -eq 0 ]; then
+            echo "[CHUNK $CHUNK_ID] Attempt 1 timed out or failed. Cleaning up and retrying with concurrency=1..."
+            rm -f $FRAMES_DIR/*.jpeg
+            timeout 900 npx remotion render \
+              src/index.jsx \
+              CypherGamma \
+              $FRAMES_DIR \
+              --sequence \
+              --image-format=jpeg \
+              --gl=swangle \
+              --frames=$START_FRAME-$END_FRAME \
+              --concurrency=1 \
+              --timeout=60000 \
+              --browser-executable=$CHROME && RENDER_SUCCESS=1
+          fi
+
+          if [ $RENDER_SUCCESS -eq 0 ]; then
+            echo "[CHUNK $CHUNK_ID] ❌ Both attempts failed. Exiting."
+            exit 1
+          fi
+
+          echo "[CHUNK $CHUNK_ID] ✅ Render completed successfully"
 
           FRAME_COUNT=$(ls $FRAMES_DIR/*.jpeg 2>/dev/null | wc -l)
           echo "[CHUNK $CHUNK_ID] $FRAME_COUNT frames JPEG rendues"
