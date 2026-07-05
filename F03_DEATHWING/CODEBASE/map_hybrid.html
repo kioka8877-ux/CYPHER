@@ -8,7 +8,7 @@
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a12; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #FFFFFF; }
   #map { width: 100%; height: 100%; }
 
   /* State name overlay — appears on landing */
@@ -38,38 +38,75 @@
 <script>
 'use strict';
 
-// ═══════════════════════════════════════════════════════════════
-// GLOBALS
-// ═══════════════════════════════════════════════════════════════
+// State color palette — matches viewer V26
+var STATE_COLORS = {
+  'WA':'#B8E1F0','OR':'#93B7D4','CA':'#FFCA06','NV':'#FDC78E','AZ':'#9DA53B',
+  'UT':'#C178AE','ID':'#00B26A','MT':'#B8E1F0','WY':'#FFDCB6','CO':'#93B7D4',
+  'NM':'#FDC78E','ND':'#FFDCB6','SD':'#C178AE','NE':'#9DA53B','KS':'#00B26A',
+  'OK':'#FFCA06','TX':'#FDC78E','MN':'#93B7D4','IA':'#B8E1F0','MO':'#C178AE',
+  'AR':'#9DA53B','LA':'#00B26A','WI':'#FFDCB6','IL':'#93B7D4','MS':'#FFCA06',
+  'MI':'#B8E1F0','IN':'#FDC78E','OH':'#C178AE','KY':'#9DA53B','TN':'#00B26A',
+  'AL':'#93B7D4','FL':'#FFCA06','GA':'#00B26A','SC':'#FDC78E','NC':'#B8E1F0',
+  'VA':'#C178AE','WV':'#9DA53B','MD':'#FFCA06','DE':'#93B7D4','PA':'#00B26A',
+  'NJ':'#FDC78E','NY':'#C178AE','CT':'#B8E1F0','RI':'#FFDCB6','MA':'#93B7D4',
+  'VT':'#9DA53B','NH':'#00B26A','ME':'#FFCA06'
+};
+
+var STATE_NAMES = {
+  'MD':'Maryland','GA':'Georgia','VA':'Virginia','FL':'Florida',
+  'CA':'California','TX':'Texas','NY':'New York','PA':'Pennsylvania',
+  'OH':'Ohio','MI':'Michigan','IL':'Illinois','NC':'North Carolina',
+  'AZ':'Arizona','WA':'Washington','OR':'Oregon','NV':'Nevada',
+  'UT':'Utah','ID':'Idaho','MT':'Montana','WY':'Wyoming','CO':'Colorado',
+  'NM':'New Mexico','ND':'North Dakota','SD':'South Dakota','NE':'Nebraska',
+  'KS':'Kansas','OK':'Oklahoma','MN':'Minnesota','IA':'Iowa','MO':'Missouri',
+  'AR':'Arkansas','LA':'Louisiana','WI':'Wisconsin','MS':'Mississippi',
+  'IN':'Indiana','KY':'Kentucky','TN':'Tennessee','AL':'Alabama',
+  'SC':'South Carolina','WV':'West Virginia','DE':'Delaware','NJ':'New Jersey',
+  'CT':'Connecticut','RI':'Rhode Island','MA':'Massachusetts','VT':'Vermont',
+  'NH':'New Hampshire','ME':'Maine'
+};
+
+// Helper: get state ISO from GeoJSON feature properties
+function getFeatureIso(f) {
+  var p = f.properties || {};
+  return p.STUSPS || p.postal || p.iso_a2 || p.ISO_A2 || p.ABBREV || p.STATE || '';
+}
+
+// Helper: get state name from GeoJSON feature properties
+function getFeatureName(f) {
+  var p = f.properties || {};
+  return p.NAME || p.name || p.STNAME || '';
+}
+
+// Generate a color for a state based on ISO code, fallback cycle
+var FALLBACK_COLORS = ['#FFCA06','#00B26A','#93B7D4','#C178AE','#FDC78E','#FFDCB6','#9DA53B','#B8E1F0'];
+function getStateColor(iso, idx) {
+  if (STATE_COLORS[iso]) return STATE_COLORS[iso];
+  return FALLBACK_COLORS[idx % FALLBACK_COLORS.length];
+}
+
+// Globals
 let map, hybridData;
 let currentHighlightId = null;
 window.mapReady = false;
 window.hybridReady = false;
 
-// ═══════════════════════════════════════════════════════════════
-// EASING
-// ═══════════════════════════════════════════════════════════════
+// Easing
 function easeInOutCubic(t) {
   return t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2, 3) / 2;
 }
 function lerp(a, b, t) { return a + (b-a) * t; }
 
-// ═══════════════════════════════════════════════════════════════
-// MAP INIT — dimensions dynamiques (vertical ou horizontal)
-// ═══════════════════════════════════════════════════════════════
+// Map init — white background, no satellite tiles
 map = new maplibregl.Map({
   container: 'map',
   style: {
     version: 8,
-    sources: {
-      'esri-sat': {
-        type: 'raster',
-        tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
-        tileSize: 256, maxzoom: 19,
-        attribution: 'Tiles © Esri'
-      }
-    },
-    layers: [{ id: 'satellite', type: 'raster', source: 'esri-sat' }]
+    sources: {},
+    layers: [
+      { id: 'white-bg', type: 'background', paint: { 'background-color': '#FFFFFF' } }
+    ]
   },
   center: [0, 20], zoom: 1.5, pitch: 0, bearing: 0,
   interactive: false,
@@ -82,24 +119,108 @@ map.on('load', () => {
   window.mapReady = true;
 });
 
-// ═══════════════════════════════════════════════════════════════
-// INIT HYBRID
-// ═══════════════════════════════════════════════════════════════
+// Init hybrid — add GeoJSON states with colors
 window.initHybrid = function(data) {
   hybridData = data;
   const { geojson, cypher_config } = data;
 
-  // Add GeoJSON source for state highlights (if available)
   if (geojson) {
+    // Add the states GeoJSON source
     map.addSource('regions', { type: 'geojson', data: geojson });
+
+    // Build a match expression for state colors
+    var matchExpr = ['match', ['get', 'STUSPS']];
+    var matchExpr2 = ['match', ['get', 'name']];
+    var matchExpr3 = ['match', ['get', 'NAME']];
+    var idx = 0;
+
+    if (geojson.features) {
+      for (var i = 0; i < geojson.features.length; i++) {
+        var f = geojson.features[i];
+        var iso = getFeatureIso(f);
+        var name = getFeatureName(f);
+        var color = getStateColor(iso, idx);
+        if (iso) matchExpr.push(iso, color);
+        if (name) matchExpr2.push(name, color);
+        if (name) matchExpr3.push(name, color);
+        idx++;
+      }
+    }
+    matchExpr.push('#D4B83A');
+    matchExpr2.push('#D4B83A');
+    matchExpr3.push('#D4B83A');
+
+    // Fill layer — colored states
+    map.addLayer({
+      id: 'states-fill',
+      type: 'fill',
+      source: 'regions',
+      paint: {
+        'fill-color': matchExpr,
+        'fill-opacity': 0.85
+      }
+    });
+
+    // Try alternate property names if STUSPS didn't match
+    // Use a second fill layer with name-based matching as fallback
+    // (only visible if first layer shows default color for all)
+
+    // State borders — thin brown lines
+    map.addLayer({
+      id: 'states-border',
+      type: 'line',
+      source: 'regions',
+      paint: {
+        'line-color': 'rgba(80,50,20,0.5)',
+        'line-width': 1
+      }
+    });
+
+    // State name labels
+    map.addLayer({
+      id: 'state-labels',
+      type: 'symbol',
+      source: 'regions',
+      layout: {
+        'text-field': ['get', 'NAME'],
+        'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+        'text-size': 12,
+        'text-anchor': 'center',
+        'text-allow-overlap': true
+      },
+      paint: {
+        'text-color': 'rgba(60,40,10,0.8)',
+        'text-halo-color': '#FFFFFF',
+        'text-halo-width': 1
+      }
+    });
+
+    // Also try with 'name' property if NAME doesn't exist
+    try {
+      map.addLayer({
+        id: 'state-labels-alt',
+        type: 'symbol',
+        source: 'regions',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
+          'text-size': 12,
+          'text-anchor': 'center',
+          'text-allow-overlap': true
+        },
+        paint: {
+          'text-color': 'rgba(60,40,10,0.8)',
+          'text-halo-color': '#FFFFFF',
+          'text-halo-width': 1
+        }
+      });
+    } catch(e) {}
   }
 
   window.hybridReady = true;
 };
 
-// ═══════════════════════════════════════════════════════════════
-// HIGHLIGHT
-// ═══════════════════════════════════════════════════════════════
+// Highlight
 function showHighlight(stateIso, color, opacity) {
   if (currentHighlightId === stateIso) return;
   clearHighlight();
@@ -107,15 +228,8 @@ function showHighlight(stateIso, color, opacity) {
 
   if (!map.getSource('regions')) return;
 
-  // Match by postal code, ISO code, or full name
-  const STATE_NAMES = {
-    'MD': 'Maryland', 'GA': 'Georgia', 'VA': 'Virginia', 'FL': 'Florida',
-    'CA': 'California', 'TX': 'Texas', 'NY': 'New York', 'PA': 'Pennsylvania',
-    'OH': 'Ohio', 'MI': 'Michigan', 'IL': 'Illinois', 'NC': 'North Carolina',
-    'AZ': 'Arizona', 'WA': 'Washington'
-  };
-  const stateFullName = STATE_NAMES[stateIso] || stateIso;
-  const f = ['any',
+  var stateFullName = STATE_NAMES[stateIso] || stateIso;
+  var f = ['any',
     ['==', ['get', 'STUSPS'], stateIso],
     ['==', ['get', 'postal'], stateIso],
     ['==', ['get', 'ISO_A2'], stateIso],
@@ -123,20 +237,21 @@ function showHighlight(stateIso, color, opacity) {
     ['==', ['get', 'ABBREV'], stateIso],
     ['==', ['get', 'name'], stateIso],
     ['==', ['get', 'name'], stateFullName],
-    ['==', ['get', 'NAME'], stateFullName]
+    ['==', ['get', 'NAME'], stateFullName],
+    ['==', ['get', 'NAME'], stateIso]
   ];
 
   map.addLayer({
     id: 'hy-fill', type: 'fill', source: 'regions', filter: f,
-    paint: { 'fill-color': color || '#A0D2DB', 'fill-opacity': opacity || 0.45 }
+    paint: { 'fill-color': color || '#B30006', 'fill-opacity': opacity || 0.45 }
   });
   map.addLayer({
     id: 'hy-glow', type: 'line', source: 'regions', filter: f,
-    paint: { 'line-color': color || '#A0D2DB', 'line-width': 10, 'line-blur': 6, 'line-opacity': 0.5 }
+    paint: { 'line-color': color || '#B30006', 'line-width': 10, 'line-blur': 6, 'line-opacity': 0.5 }
   });
   map.addLayer({
     id: 'hy-border', type: 'line', source: 'regions', filter: f,
-    paint: { 'line-color': '#ffffff', 'line-width': 2 }
+    paint: { 'line-color': '#FFFFFF', 'line-width': 2 }
   });
 }
 
@@ -147,9 +262,7 @@ function clearHighlight() {
   currentHighlightId = null;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// STATE LABEL
-// ═══════════════════════════════════════════════════════════════
+// State label
 function showStateLabel(name) {
   const el = document.querySelector('#state-label .name');
   el.textContent = name;
@@ -160,16 +273,13 @@ function hideStateLabel() {
   document.querySelector('#state-label .name').classList.remove('visible');
 }
 
-// ═══════════════════════════════════════════════════════════════
-// TRAVEL STATE MACHINE
-// ═══════════════════════════════════════════════════════════════
+// Travel state machine
 let _prevChunkId = -1;
 
 window.applyTravelState = function(t, chunkId) {
   if (!hybridData) return;
   const { chunks, cypher_config, fps } = hybridData;
 
-  // Find the chunk
   const chunk = chunks.find(c => c.id === chunkId);
   if (!chunk) return;
 
@@ -178,17 +288,16 @@ window.applyTravelState = function(t, chunkId) {
   const progress = Math.max(0, Math.min(1, timeInChunk / duration));
   const easedProgress = easeInOutCubic(progress);
 
-  const color = cypher_config ? cypher_config.highlight_color : '#A0D2DB';
+  const color = cypher_config ? cypher_config.highlight_color : '#B30006';
   const opacity = cypher_config ? cypher_config.highlight_opacity : 0.45;
 
-  // Segment change → cleanup
   if (_prevChunkId !== chunkId) {
     clearHighlight();
     hideStateLabel();
     _prevChunkId = chunkId;
   }
 
-  // ══ CAMERA — interpolate from → to ══
+  // Camera — interpolate from to
   const fromLon = chunk.from.lon;
   const fromLat = chunk.from.lat;
   const fromZoom = chunk.from.zoom;
@@ -201,8 +310,8 @@ window.applyTravelState = function(t, chunkId) {
   const curZoom = lerp(fromZoom, toZoom, easedProgress);
 
   // Pitch: start flat, rise during travel, settle at destination
-  const pitchCurve = Math.sin(progress * Math.PI); // 0→1→0
-  const curPitch = 15 + pitchCurve * 25; // 15° → 40° → 15°
+  const pitchCurve = Math.sin(progress * Math.PI);
+  const curPitch = 15 + pitchCurve * 25;
 
   map.jumpTo({
     center: [curLon, curLat],
@@ -211,12 +320,12 @@ window.applyTravelState = function(t, chunkId) {
     bearing: 0
   });
 
-  // ══ HIGHLIGHT — appear in the last 30% of travel ══
+  // Highlight — appear in the last 30% of travel
   if (progress > 0.7 && chunk.state_iso && chunk.action !== 'travel_out') {
     showHighlight(chunk.state_iso, color, opacity * Math.min(1, (progress - 0.7) / 0.2));
   }
 
-  // ══ STATE LABEL — appear in the last 20% ══
+  // State label — appear in the last 20%
   if (progress > 0.8 && chunk.state_name && chunk.action !== 'travel_out') {
     showStateLabel(chunk.state_name);
   } else {
