@@ -128,27 +128,38 @@ window.initHybrid = function(data) {
     // Add the states GeoJSON source
     map.addSource('regions', { type: 'geojson', data: geojson });
 
-    // Build a match expression for state colors
-    var matchExpr = ['match', ['get', 'STUSPS']];
-    var matchExpr2 = ['match', ['get', 'name']];
-    var matchExpr3 = ['match', ['get', 'NAME']];
+    // Build a match expression for state colors using 'name' property
+    // PublicaMundi GeoJSON uses 'name' (e.g. "Maryland"), not STUSPS
+    var matchExpr = ['match', ['get', 'name']];
+    var matchExpr2 = ['match', ['get', 'NAME']];
     var idx = 0;
+
+    // Full state name to color mapping
+    var STATE_NAME_COLORS = {
+      'Washington':'#B8E1F0','Oregon':'#93B7D4','California':'#FFCA06','Nevada':'#FDC78E','Arizona':'#9DA53B',
+      'Utah':'#C178AE','Idaho':'#00B26A','Montana':'#B8E1F0','Wyoming':'#FFDCB6','Colorado':'#93B7D4',
+      'New Mexico':'#FDC78E','North Dakota':'#FFDCB6','South Dakota':'#C178AE','Nebraska':'#9DA53B','Kansas':'#00B26A',
+      'Oklahoma':'#FFCA06','Texas':'#FDC78E','Minnesota':'#93B7D4','Iowa':'#B8E1F0','Missouri':'#C178AE',
+      'Arkansas':'#9DA53B','Louisiana':'#00B26A','Wisconsin':'#FFDCB6','Illinois':'#93B7D4','Mississippi':'#FFCA06',
+      'Michigan':'#B8E1F0','Indiana':'#FDC78E','Ohio':'#C178AE','Kentucky':'#9DA53B','Tennessee':'#00B26A',
+      'Alabama':'#93B7D4','Florida':'#FFCA06','Georgia':'#00B26A','South Carolina':'#FDC78E','North Carolina':'#B8E1F0',
+      'Virginia':'#C178AE','West Virginia':'#9DA53B','Maryland':'#FFCA06','Delaware':'#93B7D4','Pennsylvania':'#00B26A',
+      'New Jersey':'#FDC78E','New York':'#C178AE','Connecticut':'#B8E1F0','Rhode Island':'#FFDCB6','Massachusetts':'#93B7D4',
+      'Vermont':'#9DA53B','New Hampshire':'#00B26A','Maine':'#FFCA06'
+    };
 
     if (geojson.features) {
       for (var i = 0; i < geojson.features.length; i++) {
         var f = geojson.features[i];
-        var iso = getFeatureIso(f);
         var name = getFeatureName(f);
-        var color = getStateColor(iso, idx);
-        if (iso) matchExpr.push(iso, color);
+        var color = STATE_NAME_COLORS[name] || getStateColor(getFeatureIso(f), idx);
+        if (name) matchExpr.push(name, color);
         if (name) matchExpr2.push(name, color);
-        if (name) matchExpr3.push(name, color);
         idx++;
       }
     }
     matchExpr.push('#D4B83A');
     matchExpr2.push('#D4B83A');
-    matchExpr3.push('#D4B83A');
 
     // Fill layer — colored states
     map.addLayer({
@@ -182,7 +193,7 @@ window.initHybrid = function(data) {
       type: 'symbol',
       source: 'regions',
       layout: {
-        'text-field': ['get', 'NAME'],
+        'text-field': ['get', 'name'],
         'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
         'text-size': 12,
         'text-anchor': 'center',
@@ -194,27 +205,6 @@ window.initHybrid = function(data) {
         'text-halo-width': 1
       }
     });
-
-    // Also try with 'name' property if NAME doesn't exist
-    try {
-      map.addLayer({
-        id: 'state-labels-alt',
-        type: 'symbol',
-        source: 'regions',
-        layout: {
-          'text-field': ['get', 'name'],
-          'text-font': ['Open Sans Semibold', 'Arial Unicode MS Bold'],
-          'text-size': 12,
-          'text-anchor': 'center',
-          'text-allow-overlap': true
-        },
-        paint: {
-          'text-color': 'rgba(60,40,10,0.8)',
-          'text-halo-color': '#FFFFFF',
-          'text-halo-width': 1
-        }
-      });
-    } catch(e) {}
   }
 
   window.hybridReady = true;
