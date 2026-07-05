@@ -6,13 +6,13 @@
     "height": 480,
     "audio": "audio_clean.mp3",
     "title": "Top 4 US States with Heaviest Student Debt",
-    "version": "2.1",
+    "version": "2.2",
     "engines": [
       "cypher",
       "gamma"
     ],
-    "duration_seconds": 60.12,
-    "total_frames": 1804
+    "duration_seconds": 60.52,
+    "total_frames": 1816
   },
   "gamma_config": {
     "font_primary": "Arial Black",
@@ -54,7 +54,7 @@
       "id": 0,
       "engine": "gamma",
       "start": 0.0,
-      "end": 9.78,
+      "end": 9.18,
       "image_file": "intro_student_debt.png",
       "media_type": "image",
       "overlay_type": "defaut",
@@ -63,25 +63,45 @@
     },
     {
       "id": 1,
-      "engine": "gamma",
-      "start": 9.78,
-      "end": 14.44,
-      "image_file": "maryland_debt.png",
-      "media_type": "image",
-      "overlay_type": "defaut",
-      "text_subtitles": "Maryland ranks first with an average debt of over $45,000 per student.",
-      "state_name": "Maryland"
+      "engine": "cypher",
+      "start": 9.18,
+      "end": 11.78,
+      "action": "travel",
+      "from": {
+        "lon": -98.5,
+        "lat": 39.8,
+        "zoom": 3.0
+      },
+      "to": {
+        "lon": -76.64,
+        "lat": 39.05,
+        "zoom": 7.0
+      },
+      "state_name": "Maryland",
+      "state_iso": "MD"
     },
     {
       "id": 2,
+      "engine": "gamma",
+      "start": 11.78,
+      "end": 21.16,
+      "image_file": "maryland_debt.png",
+      "media_type": "image",
+      "overlay_type": "defaut",
+      "text_subtitles": "Maryland ranks first with an average debt of over $45,000 per student. This burden weighs on tens of thousands of young graduates. Life after college there often starts under the shadow of repayment.",
+      "state_name": "Maryland",
+      "debt_avg": 45000
+    },
+    {
+      "id": 3,
       "engine": "cypher",
-      "start": 14.44,
-      "end": 21.7,
+      "start": 21.16,
+      "end": 23.7,
       "action": "travel",
       "from": {
         "lon": -76.64,
         "lat": 39.05,
-        "zoom": 7
+        "zoom": 7.0
       },
       "to": {
         "lon": -83.64,
@@ -92,21 +112,22 @@
       "state_iso": "GA"
     },
     {
-      "id": 3,
+      "id": 4,
       "engine": "gamma",
-      "start": 21.7,
-      "end": 25.88,
+      "start": 23.7,
+      "end": 34.14,
       "image_file": "georgia_debt.png",
       "media_type": "image",
       "overlay_type": "defaut",
-      "text_subtitles": "Georgia follows closely, with an average hovering around $43,000.",
-      "state_name": "Georgia"
+      "text_subtitles": "Georgia follows closely, with an average hovering around $43,000. Nearly 15.4% of the adult population there carries student debt, a financial weight that slows down an entire generation's takeoff point.",
+      "state_name": "Georgia",
+      "debt_avg": 43000
     },
     {
-      "id": 4,
+      "id": 5,
       "engine": "cypher",
-      "start": 25.88,
-      "end": 34.66,
+      "start": 34.14,
+      "end": 36.66,
       "action": "travel",
       "from": {
         "lon": -83.64,
@@ -122,21 +143,22 @@
       "state_iso": "VA"
     },
     {
-      "id": 5,
+      "id": 6,
       "engine": "gamma",
-      "start": 34.66,
-      "end": 38.58,
+      "start": 36.66,
+      "end": 45.12,
       "image_file": "virginia_debt.png",
       "media_type": "image",
       "overlay_type": "defaut",
-      "text_subtitles": "In Virginia, the average debt exceeds $41,000 per borrower.",
-      "state_name": "Virginia"
+      "text_subtitles": "In Virginia, the average debt exceeds $41,000 per borrower. The high cost of living in the region only makes matters worse. The result? Years of repayment before seeing the light at the end of the tunnel.",
+      "state_name": "Virginia",
+      "debt_avg": 41000
     },
     {
-      "id": 6,
+      "id": 7,
       "engine": "cypher",
-      "start": 38.58,
-      "end": 45.6,
+      "start": 45.12,
+      "end": 47.6,
       "action": "travel",
       "from": {
         "lon": -78.17,
@@ -146,37 +168,38 @@
       "to": {
         "lon": -81.76,
         "lat": 28.68,
-        "zoom": 6
+        "zoom": 6.0
       },
       "state_name": "Florida",
       "state_iso": "FL"
     },
     {
-      "id": 7,
+      "id": 8,
       "engine": "gamma",
-      "start": 45.6,
-      "end": 50.56,
+      "start": 47.6,
+      "end": 60.12,
       "image_file": "florida_debt.png",
       "media_type": "image",
       "overlay_type": "defaut",
-      "text_subtitles": "Finally, Florida closes this ranking with an average debt of over $40,600.",
-      "state_name": "Florida"
+      "text_subtitles": "Finally, Florida closes this ranking with an average debt of over $40,600. With 2.7 million borrowers, the state accumulates over $108 billion in student debt. This massive indebtedness drags down the local economy.",
+      "state_name": "Florida",
+      "debt_avg": 40600
     },
     {
-      "id": 8,
+      "id": 9,
       "engine": "cypher",
-      "start": 50.56,
-      "end": 60.12,
+      "start": 60.12,
+      "end": 60.52,
       "action": "travel_out",
       "from": {
         "lon": -81.76,
         "lat": 28.68,
-        "zoom": 6
+        "zoom": 6.0
       },
       "to": {
         "lon": -98.5,
         "lat": 39.8,
-        "zoom": 3
+        "zoom": 3.0
       },
       "state_name": "USA",
       "state_iso": "US"
