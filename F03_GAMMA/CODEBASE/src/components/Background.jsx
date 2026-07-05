@@ -168,6 +168,7 @@ export const Background = ({ style }) => {
       {(() => {
         const bgType = style.background_type || "solid";
         const BG_URLS = {
+          bg_papier_non_froisse: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_paper_new.png",
           paper_new: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_paper_new.png",
           paper_crumpled: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_paper_crumpled.png",
           papyrus_old: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_papyrus_old.png",
