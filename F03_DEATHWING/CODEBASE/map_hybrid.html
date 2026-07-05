@@ -107,13 +107,23 @@ function showHighlight(stateIso, color, opacity) {
 
   if (!map.getSource('regions')) return;
 
-  // Match by postal code or ISO code
+  // Match by postal code, ISO code, or full name
+  const STATE_NAMES = {
+    'MD': 'Maryland', 'GA': 'Georgia', 'VA': 'Virginia', 'FL': 'Florida',
+    'CA': 'California', 'TX': 'Texas', 'NY': 'New York', 'PA': 'Pennsylvania',
+    'OH': 'Ohio', 'MI': 'Michigan', 'IL': 'Illinois', 'NC': 'North Carolina',
+    'AZ': 'Arizona', 'WA': 'Washington'
+  };
+  const stateFullName = STATE_NAMES[stateIso] || stateIso;
   const f = ['any',
     ['==', ['get', 'STUSPS'], stateIso],
     ['==', ['get', 'postal'], stateIso],
     ['==', ['get', 'ISO_A2'], stateIso],
     ['==', ['get', 'iso_a2'], stateIso],
-    ['==', ['get', 'ABBREV'], stateIso]
+    ['==', ['get', 'ABBREV'], stateIso],
+    ['==', ['get', 'name'], stateIso],
+    ['==', ['get', 'name'], stateFullName],
+    ['==', ['get', 'NAME'], stateFullName]
   ];
 
   map.addLayer({
