@@ -179,9 +179,14 @@ def build_hybrid_chunks(segs, states, fps=30):
         state_start = state_segs[0]["start"]
         state_end = state_segs[-1]["end"]
 
-        # Cypher travel chunk
+        # Cypher travel chunk — ALWAYS create one before each state (even first)
         travel_start = chunks[-1]["end"] if chunks else 0.0
         travel_end = state_start
+        # Ensure minimum 2s travel time for first state (USA → state)
+        if prev_state is None and travel_end - travel_start < 2.0:
+            travel_end = travel_start + 2.0
+            # Adjust state_start to match
+            state_start = travel_end
         if travel_end > travel_start:
             from_coords = {"lon": prev_state["lon"], "lat": prev_state["lat"], "zoom": prev_state["zoom"]} if prev_state \
                 else {"lon": USA_CENTER[2], "lat": USA_CENTER[1], "zoom": USA_CENTER[3]}
