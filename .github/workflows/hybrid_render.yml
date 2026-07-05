@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 15
     strategy:
       matrix:
-        chunk: [1, 3, 5, 7, 9]
+        chunk: ${{ fromJson(needs.prepare.outputs.cypher_chunks) }}
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
@@ -65,6 +65,7 @@ jobs:
   # JOB 2: Render GAMMA story chunks (Remotion — Docker, --sequence mode)
   # ═══════════════════════════════════════════════════════════════
   render-gamma:
+    needs: prepare
     runs-on: ubuntu-latest
     timeout-minutes: 45
     container:
@@ -73,7 +74,7 @@ jobs:
         REMOTION_CHROME_EXECUTABLE: /usr/bin/chromium
     strategy:
       matrix:
-        chunk: [0, 2, 4, 6, 8]
+        chunk: ${{ fromJson(needs.prepare.outputs.gamma_chunks) }}
       fail-fast: false
     steps:
       - uses: actions/checkout@v4
