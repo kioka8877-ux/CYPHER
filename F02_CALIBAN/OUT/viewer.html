@@ -467,7 +467,7 @@ function drawCypherPreview(ctx, W, H, chunk, t) {
 
   if (!chunk) {
     // No chunk — show full US map
-    ctx.fillStyle = '#1a3a5a'; // Blue ocean
+    ctx.fillStyle = '#FFFFFF'; // White background
     ctx.fillRect(0, 0, W, H);
     drawUSMap(ctx, W, H, project, sf, null, 1, W/2, H/2);
     return;
@@ -487,7 +487,7 @@ function drawCypherPreview(ctx, W, H, chunk, t) {
   var camZoom = lerp(1.0, 2.5, eased);
 
   // 1. Blue ocean background
-  ctx.fillStyle = '#1a3a5a';
+  ctx.fillStyle = '#FFFFFF'; // White background
   ctx.fillRect(0, 0, W, H);
 
   // 2. Draw US map with camera transform
@@ -508,7 +508,74 @@ function drawCypherPreview(ctx, W, H, chunk, t) {
   ctx.shadowBlur = 0;
 }
 
-// Helper: draw US map with camera zoom/pan
+// US Map data — simplified polygons [lat, lon] for continental US + states
+var US_MAP = {
+  us_outline: [
+    [48.9,-124.7],[48.0,-124.0],[45.0,-123.0],[42.0,-124.0],[40.0,-124.4],
+    [37.0,-122.5],[34.5,-120.6],[33.0,-117.2],[32.5,-117.2],[31.3,-117.1],
+    [30.7,-114.7],[29.1,-113.0],[27.7,-114.5],[25.9,-112.8],[24.5,-112.0],
+    [24.0,-110.3],[23.5,-110.0],[24.5,-97.5],[26.0,-97.2],[27.5,-97.4],
+    [28.5,-96.8],[29.0,-93.8],[29.2,-90.0],[29.5,-89.0],[30.0,-88.0],
+    [30.3,-87.0],[30.5,-85.0],[30.7,-83.0],[30.0,-82.0],[28.0,-80.5],
+    [26.0,-80.0],[25.2,-80.5],[26.5,-79.5],[32.0,-79.5],[34.0,-76.5],
+    [36.5,-75.5],[38.5,-74.5],[40.5,-73.5],[41.5,-72.0],[42.0,-70.5],
+    [43.5,-70.0],[44.5,-67.0],[45.5,-67.5],[47.0,-67.5],[47.5,-68.5],
+    [48.0,-69.0],[47.5,-71.0],[46.5,-72.0],[45.0,-73.5],[44.5,-75.5],
+    [43.5,-78.5],[44.0,-83.0],[45.0,-83.5],[46.5,-84.0],[48.0,-88.0],
+    [49.0,-95.0],[49.0,-123.0],[48.9,-124.7]
+  ],
+  states: {
+    'WA': {name:'Washington',color:'#B8E1F0',pts:[[49.0,-117.0],[49.0,-124.7],[46.0,-124.0],[45.5,-122.0],[46.0,-117.0]]},
+    'OR': {name:'Oregon',color:'#93B7D4',pts:[[46.0,-124.0],[46.0,-117.0],[42.0,-117.0],[42.0,-124.0]]},
+    'CA': {name:'California',color:'#FFCA06',pts:[[42.0,-124.0],[42.0,-120.0],[40.0,-120.0],[37.0,-122.0],[34.5,-120.5],[33.0,-117.2],[32.5,-117.2],[33.0,-114.6],[35.0,-114.6],[38.5,-120.5],[40.0,-123.0],[42.0,-124.0]]},
+    'NV': {name:'Nevada',color:'#FDC78E',pts:[[42.0,-120.0],[42.0,-114.0],[37.0,-114.0],[35.0,-114.6],[38.5,-120.5],[40.0,-120.0]]},
+    'AZ': {name:'Arizona',color:'#9DA53B',pts:[[37.0,-114.0],[37.0,-109.0],[31.3,-109.0],[31.3,-114.7],[33.0,-114.6],[35.0,-114.6],[37.0,-114.0]]},
+    'UT': {name:'Utah',color:'#C178AE',pts:[[42.0,-114.0],[42.0,-111.0],[37.0,-111.0],[37.0,-114.0]]},
+    'ID': {name:'Idaho',color:'#00B26A',pts:[[49.0,-117.0],[46.0,-117.0],[44.5,-117.0],[42.0,-117.0],[42.0,-111.0],[45.0,-111.0],[49.0,-111.0],[49.0,-117.0]]},
+    'MT': {name:'Montana',color:'#B8E1F0',pts:[[49.0,-111.0],[49.0,-104.0],[45.0,-104.0],[45.0,-111.0]]},
+    'WY': {name:'Wyoming',color:'#FFDCB6',pts:[[45.0,-111.0],[45.0,-104.0],[41.0,-104.0],[41.0,-111.0]]},
+    'CO': {name:'Colorado',color:'#93B7D4',pts:[[41.0,-109.0],[41.0,-102.0],[37.0,-102.0],[37.0,-109.0]]},
+    'NM': {name:'New Mexico',color:'#FDC78E',pts:[[37.0,-109.0],[37.0,-103.0],[32.0,-103.0],[31.3,-108.5],[31.3,-109.0]]},
+    'ND': {name:'North Dakota',color:'#FFDCB6',pts:[[49.0,-104.0],[49.0,-97.0],[46.0,-97.0],[46.0,-104.0]]},
+    'SD': {name:'South Dakota',color:'#C178AE',pts:[[46.0,-104.0],[46.0,-96.5],[43.0,-96.5],[43.0,-104.0]]},
+    'NE': {name:'Nebraska',color:'#9DA53B',pts:[[43.0,-104.0],[43.0,-95.3],[40.0,-95.3],[40.0,-104.0]]},
+    'KS': {name:'Kansas',color:'#00B26A',pts:[[40.0,-102.0],[40.0,-94.6],[37.0,-94.6],[37.0,-102.0]]},
+    'OK': {name:'Oklahoma',color:'#FFCA06',pts:[[37.0,-103.0],[37.0,-94.5],[34.0,-94.5],[34.0,-103.0],[32.0,-103.0],[32.0,-100.0],[34.0,-100.0],[37.0,-100.0]]},
+    'TX': {name:'Texas',color:'#FDC78E',pts:[[32.0,-103.0],[32.0,-100.0],[34.0,-100.0],[34.0,-94.5],[29.5,-94.0],[28.5,-96.8],[27.5,-97.4],[26.0,-97.2],[25.9,-99.0],[29.0,-103.0],[32.0,-106.5],[32.0,-103.0]]},
+    'MN': {name:'Minnesota',color:'#93B7D4',pts:[[49.0,-97.0],[49.0,-92.0],[45.5,-92.0],[43.5,-91.2],[43.5,-96.5],[46.0,-97.0]]},
+    'IA': {name:'Iowa',color:'#B8E1F0',pts:[[43.5,-96.5],[43.5,-90.5],[40.5,-90.5],[40.5,-95.3],[43.0,-96.5]]},
+    'MO': {name:'Missouri',color:'#C178AE',pts:[[40.5,-95.3],[40.5,-89.5],[36.5,-89.5],[36.5,-94.6],[37.0,-94.6],[40.0,-95.3]]},
+    'AR': {name:'Arkansas',color:'#9DA53B',pts:[[36.5,-94.6],[36.5,-89.5],[33.0,-91.5],[33.0,-94.5],[34.0,-94.5],[37.0,-94.6]]},
+    'LA': {name:'Louisiana',color:'#00B26A',pts:[[33.0,-94.0],[33.0,-91.5],[30.0,-89.0],[29.5,-89.0],[29.5,-93.0],[31.0,-94.0],[33.0,-94.0]]},
+    'WI': {name:'Wisconsin',color:'#FFDCB6',pts:[[47.0,-92.0],[45.5,-92.0],[43.5,-91.2],[42.5,-87.5],[45.0,-87.0],[47.0,-88.0]]},
+    'IL': {name:'Illinois',color:'#93B7D4',pts:[[42.5,-87.5],[42.5,-91.0],[39.0,-91.0],[37.0,-89.5],[38.5,-88.0],[42.0,-87.5]]},
+    'MS': {name:'Mississippi',color:'#FFCA06',pts:[[35.0,-91.0],[35.0,-88.0],[30.3,-88.0],[30.5,-89.5],[33.0,-91.5],[35.0,-91.0]]},
+    'MI': {name:'Michigan',color:'#B8E1F0',pts:[[48.0,-88.0],[46.5,-84.0],[44.0,-84.0],[43.0,-86.0],[42.0,-87.0],[45.0,-87.0],[47.0,-88.0]]},
+    'IN': {name:'Indiana',color:'#FDC78E',pts:[[41.5,-87.5],[41.5,-84.8],[38.5,-84.8],[38.0,-86.5],[39.0,-87.5],[41.5,-87.5]]},
+    'OH': {name:'Ohio',color:'#C178AE',pts:[[41.5,-84.8],[41.5,-80.5],[38.5,-80.5],[38.5,-84.8]]},
+    'KY': {name:'Kentucky',color:'#9DA53B',pts:[[39.0,-89.5],[39.0,-82.5],[36.5,-82.5],[36.5,-89.0]]},
+    'TN': {name:'Tennessee',color:'#00B26A',pts:[[36.5,-90.0],[36.5,-82.0],[35.0,-82.0],[35.0,-90.0]]},
+    'AL': {name:'Alabama',color:'#93B7D4',pts:[[35.0,-88.0],[35.0,-85.0],[31.0,-85.0],[30.3,-87.0],[30.3,-88.0]]},
+    'FL': {name:'Florida',color:'#FFCA06',pts:[[30.7,-87.4],[30.7,-84.8],[30.5,-83.0],[30.0,-82.0],[28.0,-80.5],[26.0,-80.0],[25.2,-80.5],[25.1,-81.0],[26.0,-82.0],[27.5,-82.8],[28.5,-83.0],[29.0,-83.5],[29.5,-84.5],[30.0,-85.5],[30.5,-86.8],[30.7,-87.4]]},
+    'GA': {name:'Georgia',color:'#00B26A',pts:[[35.0,-85.6],[35.0,-81.0],[34.5,-81.0],[33.0,-81.0],[32.0,-81.0],[31.0,-81.5],[30.7,-81.0],[30.7,-84.8],[31.0,-85.0],[32.5,-85.4],[34.0,-85.6],[35.0,-85.6]]},
+    'SC': {name:'South Carolina',color:'#FDC78E',pts:[[35.0,-81.0],[35.0,-79.0],[32.0,-79.0],[32.0,-81.0],[33.0,-81.0],[34.5,-81.0]]},
+    'NC': {name:'North Carolina',color:'#B8E1F0',pts:[[36.5,-79.0],[36.5,-75.5],[34.0,-76.5],[33.5,-79.0],[35.0,-79.0],[36.5,-79.0]]},
+    'VA': {name:'Virginia',color:'#C178AE',pts:[[39.5,-82.6],[39.5,-78.0],[39.5,-75.5],[38.0,-75.2],[37.0,-75.8],[36.5,-76.0],[36.5,-79.5],[37.5,-80.5],[38.0,-82.5],[39.0,-82.6],[39.5,-82.6]]},
+    'WV': {name:'West Virginia',color:'#9DA53B',pts:[[40.5,-82.5],[40.5,-77.5],[37.5,-77.5],[37.5,-82.5]]},
+    'MD': {name:'Maryland',color:'#FFCA06',pts:[[39.7,-79.5],[39.7,-77.0],[39.5,-75.8],[38.5,-75.0],[38.0,-75.5],[38.0,-76.5],[38.5,-77.0],[39.0,-77.5],[39.3,-78.5],[39.7,-79.5]]},
+    'DE': {name:'Delaware',color:'#93B7D4',pts:[[39.7,-75.5],[39.7,-75.0],[38.5,-75.0],[38.5,-75.5]]},
+    'PA': {name:'Pennsylvania',color:'#00B26A',pts:[[42.0,-80.5],[42.0,-74.5],[39.7,-74.5],[39.7,-80.5]]},
+    'NJ': {name:'New Jersey',color:'#FDC78E',pts:[[41.3,-74.5],[41.3,-73.9],[39.0,-75.0],[39.7,-75.0],[39.7,-74.5]]},
+    'NY': {name:'New York',color:'#C178AE',pts:[[45.0,-79.5],[45.0,-72.0],[41.5,-72.0],[41.5,-79.5]]},
+    'CT': {name:'Connecticut',color:'#B8E1F0',pts:[[42.0,-73.5],[42.0,-71.0],[41.0,-71.0],[41.0,-73.5]]},
+    'RI': {name:'Rhode Island',color:'#FFDCB6',pts:[[42.0,-71.8],[42.0,-71.2],[41.3,-71.2],[41.3,-71.8]]},
+    'MA': {name:'Massachusetts',color:'#93B7D4',pts:[[42.8,-73.5],[42.8,-70.0],[41.5,-70.0],[41.5,-73.0]]},
+    'VT': {name:'Vermont',color:'#9DA53B',pts:[[45.0,-73.5],[45.0,-71.5],[42.7,-71.5],[42.7,-73.5]]},
+    'NH': {name:'New Hampshire',color:'#00B26A',pts:[[45.3,-72.0],[45.3,-70.5],[43.0,-70.5],[42.8,-72.0]]},
+    'ME': {name:'Maine',color:'#FFCA06',pts:[[47.5,-68.5],[47.5,-67.0],[44.5,-67.0],[43.0,-70.5],[45.5,-71.0],[47.0,-69.0]]}
+  }
+};
+
 function drawUSMap(ctx, W, H, project, sf, highlightIso, camZoom, camX, camY) {
   function transform(wx, wy) {
     var sx = (wx - camX) * camZoom + W/2;
@@ -517,7 +584,7 @@ function drawUSMap(ctx, W, H, project, sf, highlightIso, camZoom, camX, camY) {
   }
 
   // Draw US outline (yellow/beige land)
-  ctx.fillStyle = '#E8D04A'; // Yellow land
+  ctx.fillStyle = '#F5F5F0'; // Light land base
   ctx.strokeStyle = 'rgba(80,50,20,0.6)';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -542,7 +609,7 @@ function drawUSMap(ctx, W, H, project, sf, highlightIso, camZoom, camX, camY) {
       ctx.fillStyle = gS('highlight_color'); // Red
       ctx.globalAlpha = parseFloat(gS('highlight_opacity'));
     } else {
-      ctx.fillStyle = '#D4B83A'; // Slightly darker yellow for states
+      ctx.fillStyle = state.color || '#D4B83A';
       ctx.globalAlpha = 1;
     }
 
@@ -579,84 +646,6 @@ function drawUSMap(ctx, W, H, project, sf, highlightIso, camZoom, camX, camY) {
     if (isHighlighted) {
       ctx.shadowColor = 'rgba(0,0,0,0.7)';
       ctx.shadowBlur = 6 * sf;
-    }
-    ctx.fillText(state.name, cx2, cy2);
-    ctx.shadowBlur = 0;
-  }
-}
-
-// Helper: draw US map with camera zoom/pan
-function drawUSMap(ctx, W, H, project, sf, highlightIso, camZoom, camX, camY) {
-  // Transform: screen = (world - camCenter) * zoom + screenCenter
-  function transform(wx, wy) {
-    var sx = (wx - camX) * camZoom + W/2;
-    var sy = (wy - camY) * camZoom + H/2;
-    return {x: sx, y: sy};
-  }
-
-  // Draw US outline
-  ctx.strokeStyle = 'rgba(80,50,20,0.5)';
-  ctx.lineWidth = 1.5;
-  ctx.fillStyle = '#E8D5B0'; // Light beige for US land
-  ctx.beginPath();
-  for (var i = 0; i < US_OUTLINE.length; i++) {
-    var wp = project(US_OUTLINE[i][1], US_OUTLINE[i][0]);
-    var sp = transform(wp.x, wp.y);
-    if (i === 0) ctx.moveTo(sp.x, sp.y);
-    else ctx.lineTo(sp.x, sp.y);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-
-  // Draw state outlines + names
-  for (var iso in US_STATES) {
-    var state = US_STATES[iso];
-    var isHighlighted = (iso === highlightIso);
-
-    // State fill
-    if (isHighlighted) {
-      ctx.fillStyle = gS('highlight_color');
-      ctx.globalAlpha = parseFloat(gS('highlight_opacity'));
-    } else {
-      ctx.fillStyle = '#D4C49B';
-      ctx.globalAlpha = 1;
-    }
-
-    ctx.beginPath();
-    for (var i = 0; i < state.pts.length; i++) {
-      var wp = project(state.pts[i][1], state.pts[i][0]);
-      var sp = transform(wp.x, wp.y);
-      if (i === 0) ctx.moveTo(sp.x, sp.y);
-      else ctx.lineTo(sp.x, sp.y);
-    }
-    ctx.closePath();
-    ctx.fill();
-
-    // State border
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = isHighlighted ? gS('border_color') : 'rgba(80,50,20,0.4)';
-    ctx.lineWidth = isHighlighted ? parseInt(gS('border_width')) : 1;
-    ctx.stroke();
-
-    // State name (always visible)
-    // Calculate centroid
-    var cx2 = 0, cy2 = 0;
-    for (var i = 0; i < state.pts.length; i++) {
-      var wp = project(state.pts[i][1], state.pts[i][0]);
-      var sp = transform(wp.x, wp.y);
-      cx2 += sp.x; cy2 += sp.y;
-    }
-    cx2 /= state.pts.length; cy2 /= state.pts.length;
-
-    var fontSize = (isHighlighted ? 14 : 10) * sf * Math.min(camZoom, 2);
-    ctx.font = 'bold ' + fontSize + "px Arial, sans-serif";
-    ctx.fillStyle = isHighlighted ? '#FFFFFF' : 'rgba(60,40,10,0.7)';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    if (isHighlighted) {
-      ctx.shadowColor = 'rgba(0,0,0,0.5)';
-      ctx.shadowBlur = 4 * sf;
     }
     ctx.fillText(state.name, cx2, cy2);
     ctx.shadowBlur = 0;
