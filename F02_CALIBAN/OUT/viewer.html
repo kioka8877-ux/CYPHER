@@ -366,9 +366,14 @@ function buildHybridChunks(segs, states, fps) {
     if (!stateSegs.length) continue;
     var stateStart = stateSegs[0].start;
     var stateEnd = stateSegs[stateSegs.length-1].end;
-    // Travel
+    // Travel — ALWAYS create one before each state (even first state)
     var travelStart = result.length ? result[result.length-1].end : 0.0;
     var travelEnd = stateStart;
+    // Ensure minimum 2s travel for first state (USA → state)
+    if (!prevState && travelEnd - travelStart < 2.0) {
+      travelEnd = travelStart + 2.0;
+      stateStart = travelEnd;
+    }
     if (travelEnd > travelStart) {
       var fromCoords = prevState
         ? {lon: prevState.lon, lat: prevState.lat, zoom: prevState.zoom}
