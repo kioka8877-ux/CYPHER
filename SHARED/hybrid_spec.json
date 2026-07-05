@@ -6,7 +6,7 @@
     "height": 480,
     "audio": "audio_clean.mp3",
     "title": "Top 4 US States with Heaviest Student Debt",
-    "version": "2.0",
+    "version": "2.1",
     "engines": [
       "cypher",
       "gamma"
