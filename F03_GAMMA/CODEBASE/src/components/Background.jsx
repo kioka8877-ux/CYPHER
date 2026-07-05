@@ -164,23 +164,34 @@ export const Background = ({ style }) => {
       {/* @font-face — injection synchrone, zéro réseau */}
       <style>{FONT_FACES}</style>
 
-      {/* Fond (image ou couleur unie) */}
-      {style.background_image && style.background_image !== "solid" ? (
-        <AbsoluteFill style={{ overflow: "hidden" }}>
-          <Img
-            src={staticFile(style.background_image)}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "cover",
-              transform: `scale(${style.background_scale ?? 1})`,
-              transformOrigin: "center center",
-            }}
-          />
-        </AbsoluteFill>
-      ) : (
-        <AbsoluteFill style={{ backgroundColor: style.background_color }} />
-      )}
+      {/* Fond (texture ou couleur unie) — reads background_type from gamma_config */}
+      {(() => {
+        const bgType = style.background_type || "solid";
+        const BG_URLS = {
+          paper_new: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_paper_new.png",
+          paper_crumpled: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_paper_crumpled.png",
+          papyrus_old: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_papyrus_old.png",
+          grid_dark: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_grid_dark.png",
+        };
+        const bgUrl = BG_URLS[bgType];
+        if (bgType !== "solid" && bgUrl) {
+          return (
+            <AbsoluteFill style={{ overflow: "hidden" }}>
+              <Img
+                src={bgUrl}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  transform: `scale(${style.background_scale ?? 1})`,
+                  transformOrigin: "center center",
+                }}
+              />
+            </AbsoluteFill>
+          );
+        }
+        return <AbsoluteFill style={{ backgroundColor: style.background_color }} />;
+      })()}
 
       {/* Grain (film grain via SVG feTurbulence) */}
       {grainOpacity > 0 && (
