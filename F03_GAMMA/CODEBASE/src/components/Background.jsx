@@ -177,18 +177,16 @@ export const Background = ({ style }) => {
         const bgUrl = BG_URLS[bgType];
         if (bgType !== "solid" && bgUrl) {
           return (
-            <AbsoluteFill style={{ overflow: "hidden" }}>
-              <Img
-                src={bgUrl}
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  transform: `scale(${style.background_scale ?? 1})`,
-                  transformOrigin: "center center",
-                }}
-              />
-            </AbsoluteFill>
+            <AbsoluteFill
+              style={{
+                backgroundImage: `url(${bgUrl})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center center",
+                backgroundRepeat: "no-repeat",
+                transform: `scale(${style.background_scale ?? 1})`,
+                transformOrigin: "center center",
+              }}
+            />
           );
         }
         return <AbsoluteFill style={{ backgroundColor: style.background_color }} />;
