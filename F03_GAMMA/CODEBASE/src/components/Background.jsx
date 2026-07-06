@@ -1,5 +1,5 @@
 // src/components/Background.jsx — F03 SIGISMUND v3
-// Fond permanent : couleur papier + grain animé + vignette.
+// Fond permanent : image papier uniquement (pas de grain, pas de vignette).
 //
 // ── Polices locales ──────────────────────────────────────────────────────────
 // PLUS de Google Fonts. PLUS de delayRender. PLUS d'appel réseau.
@@ -168,11 +168,11 @@ export const Background = ({ style }) => {
       {(() => {
         const bgType = style.background_type || "solid";
         const BG_URLS = {
-          bg_papier_non_froisse: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_paper_new.png",
-          paper_new: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_paper_new.png",
-          paper_crumpled: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_paper_crumpled.png",
-          papyrus_old: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_papyrus_old.png",
-          grid_dark: "https://raw.githubusercontent.com/kioka8877-ux/CRUSADER/main/gamma/F02_PREVIEW/dist/bg_grid_dark.png",
+          bg_papier_non_froisse: staticFile('bg/bg_paper_new.png'),
+          paper_new: staticFile('bg/bg_paper_new.png'),
+          paper_crumpled: staticFile('bg/bg_paper_crumpled.png'),
+          papyrus_old: staticFile('bg/bg_papyrus_old.png'),
+          grid_dark: staticFile('bg/bg_grid_dark.png'),
         };
         const bgUrl = BG_URLS[bgType];
         if (bgType !== "solid" && bgUrl) {
@@ -194,50 +194,12 @@ export const Background = ({ style }) => {
         return <AbsoluteFill style={{ backgroundColor: style.background_color }} />;
       })()}
 
-      {/* Grain (film grain via SVG feTurbulence) */}
-      {grainOpacity > 0 && (
-        <AbsoluteFill
-          style={{
-            opacity: grainOpacity,
-            mixBlendMode: "overlay",
-            pointerEvents: "none",
-          }}
-        >
-          <svg
-            width="100%"
-            height="100%"
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ display: "block" }}
-          >
-            <filter id={`grain-${grainSeed}`}>
-              <feTurbulence
-                type="fractalNoise"
-                baseFrequency="0.75"
-                numOctaves="4"
-                seed={grainSeed}
-                stitchTiles="stitch"
-              />
-              <feColorMatrix type="saturate" values="0" />
-            </filter>
-            <rect
-              width="100%"
-              height="100%"
-              filter={`url(#grain-${grainSeed})`}
-            />
-          </svg>
-        </AbsoluteFill>
-      )}
+    </AbsoluteFill>
+          );
+        }
+        return <AbsoluteFill style={{ backgroundColor: style.background_color }} />;
+      })()}
 
-      {/* Vignette */}
-      {style.vignette && (
-        <AbsoluteFill
-          style={{
-            background:
-              "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.70) 100%)",
-            pointerEvents: "none",
-          }}
-        />
-      )}
     </AbsoluteFill>
   );
 };
