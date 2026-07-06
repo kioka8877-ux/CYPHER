@@ -22,9 +22,12 @@ export const Scene = ({ segment, timingSeg, style, durationInFrames }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
 
-  // ── Sinusoidal movement (camera_amplitude from config) ──
+  // ── Sinusoidal movement (only when multiple visuals in chunk) ──
   const camAmplitude = style.camera_amplitude || 200;
-  const sinY = Math.sin(frame / fps * Math.PI * 0.5) * Math.min(camAmplitude * 0.05, 15);
+  const visualCount = segment.image_file ? 1 : 0;
+  const sinY = visualCount > 1
+    ? Math.sin(frame / fps * Math.PI * 0.5) * Math.min(camAmplitude * 0.05, 15)
+    : 0;
 
   // ── Ken Burns zoom ──
   const scale = interpolate(frame, [0, durationInFrames], [1.0, 1.04], {
