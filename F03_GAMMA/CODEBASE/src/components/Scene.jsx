@@ -18,7 +18,7 @@ function resolveImagePath(imageFile) {
   return staticFile(`images/${imageFile}`);
 }
 
-export const Scene = ({ segment, timingSeg, style, durationInFrames }) => {
+export const Scene = ({ segment, timingSeg, style, durationInFrames, idx = 0 }) => {
   const frame = useCurrentFrame();
   const { fps, width, height } = useVideoConfig();
 
@@ -107,36 +107,69 @@ export const Scene = ({ segment, timingSeg, style, durationInFrames }) => {
         </div>
       )}
 
-      {/* ── Title (outside capsule, above or right) ── */}
+      {/* ── Title (outside capsule — alternating top/right) ── */}
       {titleVisible && titleText && (
-        <div
-          style={{
-            position: "absolute",
-            left: capsuleX + capsuleW / 2,
-            top: capsuleY - titleGap - titleSize,
-            transform: `translateX(-50%) translateY(${(1 - titleEased) * -30}px)`,
-            opacity: titleEased,
-            fontFamily: `'${titleFont}', Georgia, serif`,
-            fontSize: titleSize,
-            fontWeight: "bold",
-            color: titleColor,
-            textShadow: "0 2px 12px rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.5)",
-            pointerEvents: "none",
-            zIndex: 10,
-            whiteSpace: "nowrap",
-            textAlign: "center",
-          }}
-        >
-          {titleText}
-        </div>
+        (() => {
+          const isAbove = idx % 2 === 0;
+          if (isAbove) {
+            // Even index: title ABOVE capsule, drop-in
+            return (
+              <div
+                style={{
+                  position: "absolute",
+                  left: capsuleX + capsuleW / 2,
+                  top: capsuleY - titleGap - titleSize,
+                  transform: `translateX(-50%) translateY(${(1 - titleEased) * -30}px)`,
+                  opacity: titleEased,
+                  fontFamily: `'${titleFont}', Georgia, serif`,
+                  fontSize: titleSize,
+                  fontWeight: "bold",
+                  color: titleColor,
+                  textShadow: "0 2px 12px rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.5)",
+                  pointerEvents: "none",
+                  zIndex: 10,
+                  whiteSpace: "nowrap",
+                  textAlign: "center",
+                }}
+              >
+                {titleText}
+              </div>
+            );
+          } else {
+            // Odd index: title to the RIGHT of capsule, slide-in
+            const slideX = (1 - titleEased) * 50;
+            return (
+              <div
+                style={{
+                  position: "absolute",
+                  left: capsuleX + capsuleW + titleGap,
+                  top: capsuleY + capsuleH / 2,
+                  transform: `translateY(-50%) translateX(${slideX}px)`,
+                  opacity: titleEased,
+                  fontFamily: `'${titleFont}', Georgia, serif`,
+                  fontSize: titleSize,
+                  fontWeight: "bold",
+                  color: titleColor,
+                  textShadow: "0 2px 12px rgba(0,0,0,0.85), 0 0 4px rgba(0,0,0,0.5)",
+                  pointerEvents: "none",
+                  zIndex: 10,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {titleText}
+              </div>
+            );
+          }
+        })()
       )}
 
-      {/* ── Subtitle ── */}
+      {/* ── Subtitle (positioned below capsule) ── */}
       <Subtitle
         segment={segment}
         timingSeg={timingSeg}
         style={style}
         durationInFrames={durationInFrames}
+        capsuleBottom={capsuleY + capsuleH}
       />
     </AbsoluteFill>
   );
