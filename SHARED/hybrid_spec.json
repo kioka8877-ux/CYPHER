@@ -64,7 +64,8 @@
       "start": 0,
       "end": 9.78,
       "text_subtitles": "In the United States, student debt is reaching record highs. In certain states, students are hit especially hard. Here are the four states with the heaviest debt burdens.",
-      "state_name": "Introduction"
+      "state_name": "Introduction",
+      "image_file": "intro_student_debt.png"
     },
     {
       "id": 1,
@@ -91,7 +92,8 @@
       "start": 11.78,
       "end": 14.44,
       "text_subtitles": "Maryland ranks first with an average debt of over $45,000 per student.",
-      "state_name": "Maryland"
+      "state_name": "Maryland",
+      "image_file": "maryland_debt.png"
     },
     {
       "id": 3,
@@ -118,7 +120,8 @@
       "start": 21.7,
       "end": 25.88,
       "text_subtitles": "Georgia follows closely, with an average hovering around $43,000.",
-      "state_name": "Georgia"
+      "state_name": "Georgia",
+      "image_file": "georgia_debt.png"
     },
     {
       "id": 5,
@@ -145,7 +148,8 @@
       "start": 34.66,
       "end": 38.58,
       "text_subtitles": "In Virginia, the average debt exceeds $41,000 per borrower.",
-      "state_name": "Virginia"
+      "state_name": "Virginia",
+      "image_file": "virginia_debt.png"
     },
     {
       "id": 7,
@@ -172,7 +176,8 @@
       "start": 45.6,
       "end": 50.56,
       "text_subtitles": "Finally, Florida closes this ranking with an average debt of over $40,600.",
-      "state_name": "Florida"
+      "state_name": "Florida",
+      "image_file": "florida_debt.png"
     },
     {
       "id": 9,
