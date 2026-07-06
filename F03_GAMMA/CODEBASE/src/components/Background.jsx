@@ -195,11 +195,5 @@ export const Background = ({ style }) => {
       })()}
 
     </AbsoluteFill>
-          );
-        }
-        return <AbsoluteFill style={{ backgroundColor: style.background_color }} />;
-      })()}
-
-    </AbsoluteFill>
   );
 };
