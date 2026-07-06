@@ -35,7 +35,18 @@ export const Main = ({ timing, roadmap }) => {
         if (dur <= 0) return null;
 
         // Correspondance 1-à-1 : timeline[idx] ↔ timing.segments[idx]
-        const timingSeg = timing?.segments?.[idx] || null;
+        // Find timing segments by time range overlap (gamma chunks don't map 1:1 to timing segments)
+        const segStart = seg.start !== undefined ? seg.start : (seg.start_frame / (timing?.meta?.fps || 30));
+        const segEnd = seg.end !== undefined ? seg.end : (seg.end_frame / (timing?.meta?.fps || 30));
+        const overlappingTiming = timing?.segments?.filter(ts => {
+          const tsStart = ts.start !== undefined ? ts.start : 0;
+          const tsEnd = ts.end !== undefined ? ts.end : 0;
+          return tsStart < segEnd && tsEnd > segStart;
+        }) || [];
+        const timingSeg = overlappingTiming.length > 0 ? {
+          ...overlappingTiming[0],
+          words: overlappingTiming.flatMap(ts => ts.words || [])
+        } : null;
 
         return (
           <Sequence
