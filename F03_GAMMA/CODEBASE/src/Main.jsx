@@ -60,6 +60,7 @@ export const Main = ({ timing, roadmap }) => {
               timingSeg={timingSeg}
               style={roadmap.style}
               durationInFrames={dur}
+              idx={idx}
             />
           </Sequence>
         );
