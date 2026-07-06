@@ -35,16 +35,20 @@ export const Subtitle = ({ segment, timingSeg, style, durationInFrames }) => {
 
   // ── Position verticale ─────────────────────────────────────────────────────
   const posStyle = {};
-  switch (style.subtitle_position) {
-    case "top":
-      posStyle.top = "8%";
-      break;
-    case "center":
-      posStyle.top = "50%";
-      posStyle.transform = `translateY(-50%) translateX(${slideX}px)`;
-      break;
-    default: // bottom
-      posStyle.bottom = "8%";
+  if (capsuleBottom !== undefined) {
+    posStyle.top = `${capsuleBottom + 12}px`;
+  } else {
+    switch (style.subtitle_position) {
+      case "top":
+        posStyle.top = "8%";
+        break;
+      case "center":
+        posStyle.top = "50%";
+        posStyle.transform = `translateY(-50%) translateX(${slideX}px)`;
+        break;
+      default: // bottom
+        posStyle.bottom = "8%";
+    }
   }
 
   // ── Rendu des mots (mots forts = couleur accent, sinon couleur normale) ────
