@@ -6,7 +6,7 @@ import { interpolate, useCurrentFrame } from "remotion";
 // Distance de glissement slide-in (en px)
 const SLIDE_PX = 30;
 
-export const Subtitle = ({ segment, timingSeg, style, durationInFrames }) => {
+export const Subtitle = ({ segment, timingSeg, style, durationInFrames, capsuleBottom }) => {
   const frame = useCurrentFrame();
 
   // Lecture des paramètres d'animation depuis le roadmap.json
