@@ -44,7 +44,7 @@
     "world_title_color": "#0d0d0d",
     "world_title_speed": 12,
     "world_title_gap": 20,
-    "background_image": "bg_paper_new.png"
+    "background_image": "bg_grid_dark.png"
   },
   "cypher_config": {
     "highlight_color": "#B30006",
